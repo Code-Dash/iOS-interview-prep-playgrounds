@@ -12,6 +12,9 @@ struct Capitalized {
         get { value }
         set { value = newValue.capitalized }
     }
+    init(wrappedValue: String) {
+        self.value = wrappedValue.capitalized
+    }
 }
 
 struct User {
@@ -41,7 +44,7 @@ struct Clamped<Value: Comparable> {
 }
 
 struct Score {
-    @Clamped(0...100) var value: Int
+    @Clamped(0...100) var value: Int = 0
 }
 
 var score = Score(value: 50)
