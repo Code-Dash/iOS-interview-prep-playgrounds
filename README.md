@@ -4,8 +4,4 @@
 
 ## Downloads
 
-The `downloads/` folder contains reader downloads for The iOS Interview Handbook:
-
-- **Rapid Drill Sheet** (MD & PDF) — for interview practice
-- **Word document** (.docx) — full book with TOC
-- **EPUB** (.epub) — for e-readers
+The `downloads/` folder contains the **Rapid Drill Sheet** (MD & PDF) — a study aid for interview practice. The full book is available on Amazon.
