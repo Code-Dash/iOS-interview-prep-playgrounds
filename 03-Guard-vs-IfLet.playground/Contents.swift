@@ -1,5 +1,5 @@
 //: Playground Practice — guard vs if let
-//: Rapid Sheet: "When would you use guard let instead of if let?"
+//: Rapid Sheet: "When would you use `guard let` instead of `if let`?"
 //: Compare: guard keeps unwrapped value in scope; if let keeps it only in the block.
 
 import Foundation

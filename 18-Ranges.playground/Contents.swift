@@ -1,5 +1,5 @@
 //: Playground Practice — Ranges
-//: Rapid Sheet: "How do ranges work in Swift? Explain closed, half-open, and one-sided."
+//: Rapid Sheet: "How do ranges work in Swift? Explain closed, half-open, and one-sided ranges."
 //: Run this, then practice explaining each range type.
 
 import Foundation
