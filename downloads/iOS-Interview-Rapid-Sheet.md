@@ -23,7 +23,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Copy-on-write: standard collections copy their buffer only when a shared buffer is mutated (`isKnownUniquelyReferenced`)
 - Concurrency: non-public structs/enums with `Sendable` members are inferred `Sendable`; classes need `final` + immutable `Sendable` state, a `Mutex`, or actor isolation
 - Noncopyable types (`~Copyable`): structs/enums that are *moved*, not copied, for unique ownership (file handles, tokens) with `consuming`/`borrowing`
-- `InlineArray<N, Element>` (Swift 6.2, iOS 26+): fixed-size, inline storage value type with no heap allocation
+- `InlineArray<N, Element>` (Swift 6.2): fixed-size, inline storage value type with no heap allocation
 - A struct containing a class reference copies the reference, not the object (shared state leaks through)
 
 **Related to check:** Copy-on-write, mutating functions, weak vs unowned, `Sendable`, actors, noncopyable types, `InlineArray`/`Span`
@@ -49,7 +49,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Structs and enums can have a `deinit`; inside a `consuming` method, `discard self` skips it (for example after a close that already released the resource)
 - Noncopyable generics (Swift 6.0): `<T: ~Copyable>` accepts both kinds; `extension Box: Copyable where Wrapped: Copyable {}` restores copying conditionally. Protocols opt in with `protocol Resource: ~Copyable`
 - `Optional` holds noncopyable values: optional chaining, `switch`, and `take()` to move the value out and leave `nil`
-- Swift 6.4: noncopyable types can conform to `Equatable` and `Hashable` (synthesis included); this builds at an iOS 18 target
+- Swift 6.4: noncopyable types can conform to `Equatable` and `Hashable` (synthesis included); it's a compiler feature, so it has no OS requirement
 
 **Related to check:** Value vs reference types, copy-on-write, generics, `InlineArray` / `Span`, `Mutex`, `Equatable` and `Hashable`, optionals
 
@@ -72,7 +72,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - It's not a `Sequence`: index it (`for i in a.indices`) or read it through `a.span`. `for x in inlineArray` needs iOS 27, because it goes through Swift 6.4's `Iterable` protocol
 - Every copy is a full element-by-element copy, so keep it small
 - `Span<T>` (read-only), `MutableSpan<T>` (in-place writes), `RawSpan` (untyped bytes, `span.bytes`), `UTF8Span` (validated UTF-8, `string.utf8Span`)
-- `Array`, `ContiguousArray`, `InlineArray` and `String.UTF8View` expose `.span`; mutable collections expose `.mutableSpan` (iOS 26+)
+- `Array`, `ContiguousArray`, `InlineArray` and `String.UTF8View` expose `.span`; mutable collections expose `.mutableSpan`
 - Bounds-checked like `Array`, but no retain/release and no ownership transfer
 - Context: Swift 6.2 also adds opt-in **strict memory safety** (`-strict-memory-safety`), which warns on every unsafe construct until it's marked with the `unsafe` keyword; `Span` is how you remove those sites rather than annotate them
 
@@ -200,7 +200,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Generics (static, specialized, caller chooses the type) vs `any Protocol` existentials (a box, dynamic dispatch, value can change type)
 - **Parameter packs** (`each T` / `repeat each T`): any number of differently typed arguments, e.g. a `zip` over N sequences
 - **Noncopyable generics:** every generic parameter implicitly requires `Copyable`; `<T: ~Copyable>` lifts that so the code also accepts move-only types
-- **Integer generic parameters** (Swift 6.2, iOS 26+ runtime): `struct Vector<let count: Int>`, the basis of `InlineArray<count, Element>`
+- **Integer generic parameters** (Swift 6.2, needs the iOS 26 runtime): `struct Vector<let count: Int>`, the basis of `InlineArray<count, Element>`
 
 **Related to check:** Opaque types (`some`) vs existentials (`any`), protocols with associated types, noncopyable types, `InlineArray` / `Span`, `Sendable`, `inout` parameters
 
@@ -224,7 +224,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Constraints apply per element: `<each T: Equatable>`, or `where repeat each T: Sendable`
 - Two packs used in one `repeat` must have the same length (*same-shape* requirement), which the compiler checks
 - Swift 6.0 (SE-0408): iterate with `for item in repeat each value`; zip two packs with `for (l, r) in repeat (each lhs, each rhs)`
-- Generic *types* can be variadic too (`struct Query<each Column>`); this needs the iOS 17 runtime, so it's fine at an iOS 18 baseline
+- Generic *types* can be variadic too (`struct Query<each Column>`), with the same `repeat each` syntax for stored tuples
 - Real APIs built on packs: SwiftUI `ViewBuilder.buildBlock`, Foundation `#Predicate<each Input>` and `#Expression`
 
 **Related to check:** Generics, tuples, SwiftUI `@ViewBuilder`, macros (`#Predicate`), `Sendable`, structured concurrency (`async let`, task groups)
@@ -591,7 +591,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Implement `hash(into:)` with `hasher.combine(...)`; `hashValue` is the legacy requirement
 - `Hasher` is randomly seeded per process: never persist hash values or rely on `Set` order
 - `Comparable` is synthesized for enums without payloads (by declaration order) and with `Comparable` payloads
-- Swift 6.4: `Equatable` and `Hashable` no longer require `Copyable`, so a `~Copyable` type can conform (synthesis included); it compiled back to an iOS 18 target, but `Set` and `Dictionary` still need copyable elements
+- Swift 6.4: `Equatable` and `Hashable` no longer require `Copyable`, so a `~Copyable` type can conform (synthesis included); it's a compiler feature with no OS requirement, but `Set` and `Dictionary` still need copyable elements
 
 **Related to check:** `Set` and `Dictionary`, `Comparable`, `Identifiable`, conditional conformance, noncopyable types, SwiftUI diffing
 
@@ -615,7 +615,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Dictionary subscript returns an optional; `dict[key, default: 0] += 1` updates in place
 - Useful APIs: `Dictionary(grouping:by:)`, `Dictionary(uniqueKeysWithValues:)`, `mapValues`, `removeAll(where:)`, set algebra (`union`, `intersection`, `subtracting`), and `count(where:)` (Swift 6.0)
 - All three are `Sendable` when their elements are, so they cross actors freely
-- `InlineArray<N, Element>` (Swift 6.2, iOS 26+): fixed count in the type, stored inline, no heap allocation and no copy-on-write; it is not a `Sequence`, so you index it or read it through its `span` (with the Swift 6.4 toolchain, `for-in` works on it from iOS 27 via the new `Iterable` protocol)
+- `InlineArray<N, Element>` (Swift 6.2): fixed count in the type, stored inline, no heap allocation and no copy-on-write; it is not a `Sequence`, so you index it or read it through its `span` (with the Swift 6.4 toolchain, `for-in` works on it from iOS 27 via the new `Iterable` protocol)
 - For ordered-and-unique or a deque, use `OrderedSet`/`OrderedDictionary`/`Deque` from the swift-collections package
 
 **Related to check:** Copy-on-write, `Hashable`, `Collection`/`Sequence` protocols, lazy collections, `Span`, swift-collections
@@ -734,10 +734,10 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `String ==` uses canonical equivalence: `"e\u{301}" == "é"` is `true`; `NSString.isEqual(to:)` compares code units and returns `false`
 - `String` is indexed by `String.Index`, not `Int`, because characters vary in size; `count` is O(n)
 - `NSString` uses `NSRange` (UTF-16 offsets); convert with `Range(nsRange, in: string)` and `NSRange(range, in: string)`
-- Bridging is cheap but not free: a bridged `NSString` is wrapped lazily and may be converted to native UTF-8 on first heavy use
+- Bridging is cheap but not free: a bridged `NSString` is wrapped lazily without copying (still UTF-16 underneath), so operations that need UTF-8, such as `withCString`, transcode on the fly, and mutating it copies it into native UTF-8 storage
 - `NSString` isn't `Sendable` (`NSMutableString` could hide behind it); `String` is
 - `Substring` shares storage with its base string; convert to `String` before storing
-- `UTF8Span` (Swift 6.2, iOS 26+): `string.utf8Span` gives safe, validated, non-copying access to the UTF-8 bytes for parsers
+- `UTF8Span` (Swift 6.2): `string.utf8Span` gives safe, validated, non-copying access to the UTF-8 bytes for parsers
 
 **Related to check:** String interpolation, value vs reference types, copy-on-write, ranges, Unicode and grapheme clusters, Swift Regex, `Sendable`
 
@@ -1036,7 +1036,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - One-sided: `PartialRangeFrom` (`2...`), `PartialRangeUpTo` (`..<3`), `PartialRangeThrough` (`...3`)
 - Integer ranges are collections (`count`, `map`, `reversed()`); `0.0...1.0` is only for `contains`/`~=` and clamping
 - Collection slicing: `array[2...]`, `array[..<3]`; slices (`ArraySlice`, `Substring`) keep the original indices and share storage
-- `RangeExpression` lets APIs accept any range kind; `RangeSet` (iOS 18) represents non-contiguous ranges
+- `RangeExpression` lets APIs accept any range kind; `RangeSet` (Swift 6.0) represents non-contiguous ranges
 - `stride(from:to:by:)` / `stride(from:through:by:)` for steps other than 1 or descending loops
 
 **Related to check:** Pattern matching, subscripts, collections, string vs NSString (String indices), `Strideable`, `RangeSet`
@@ -1345,17 +1345,17 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Every SDK symbol carries an `@available` annotation, and the compiler compares it with your deployment target: if you target iOS 18 and call an iOS 26 API, the build fails until you guard the call. `if #available(iOS 26, *)` (or `guard`, or `#unavailable` for the inverse) is a runtime check that also tells the compiler the guarded code is safe.
+**Short answer:** Every SDK symbol carries an `@available` annotation, and the compiler compares it with your deployment target: if you target iOS 26 and call an iOS 27 API, the build fails until you guard the call. `if #available(iOS 27, *)` (or `guard`, or `#unavailable` for the inverse) is a runtime check that also tells the compiler the guarded code is safe.
 
 **Key points:**
 
-- `#available(iOS 26, *)`: `*` means "every other platform, at its minimum deployment target"
-- `#unavailable(iOS 26)` (Swift 5.6) reads better than an empty `if #available {} else {}`
-- `@available(iOS 26, *)` on a function, type or extension; `@available(*, deprecated, renamed: "new()")` and `@available(*, unavailable)` for API evolution
+- `#available(iOS 27, *)`: `*` means "every other platform, at its minimum deployment target"
+- `#unavailable(iOS 27)` (Swift 5.6) reads better than an empty `if #available {} else {}`
+- `@available(iOS 27, *)` on a function, type or extension; `@available(*, deprecated, renamed: "new()")` and `@available(*, unavailable)` for API evolution
 - Version numbers jumped from **iOS 18 to iOS 26** (Apple moved to year-based versions in 2025); there was no iOS 19–25
 - Swift 6.4 accepts `anyAppleOS` (`@available(anyAppleOS 26, *)`) now that all Apple platforms share one version number; the iOS 27 SDK uses it itself
-- Language features (typed throws, `if`/`switch` expressions, `package`, noncopyable types) need a newer *compiler*, not a newer OS. Runtime features (`InlineArray`, `Span`, integer generic parameters: iOS 26+; `UniqueArray`: iOS 27+) need the OS
-- Some new APIs back-deploy: `@backDeployed(before:)` or inlinable wrappers ship the implementation in your app (e.g. Xcode 27's item-bound `alert(_:item:…)` compiles at an iOS 18 target)
+- Language features (typed throws, `if`/`switch` expressions, `package`, noncopyable types) need a newer *compiler*, not a newer OS. Runtime features need the OS: `InlineArray`, `Span` and integer generic parameters need iOS 26 (the baseline now), `UniqueArray` and `withTaskCancellationShield` need iOS 27
+- Some new APIs back-deploy: `@backDeployed(before:)` or inlinable wrappers ship the implementation in your app (e.g. Xcode 27's item-bound `alert(_:item:…)` compiles at an iOS 26 target)
 
 **Related to check:** Deployment target vs base SDK, backward compatibility, `#if` conditional compilation, `@backDeployed`, API deprecation
 
@@ -1379,11 +1379,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `loadView`: create the root view; override only when building it in code without calling `super`
 - `viewDidLoad`: once per load. One-time setup: subviews, constraints, data sources. Bounds and traits aren't final yet
 - `viewWillAppear`: before the transition starts. The view is not in the window yet, so traits and size may be stale
-- `viewIsAppearing` (back-deployed to iOS 13): the view is in the hierarchy with accurate traits and size. The best place for appearance-time UI updates and scrolling to an initial position
+- `viewIsAppearing`: the view is in the hierarchy with accurate traits and size. The best place for appearance-time UI updates and scrolling to an initial position
 - `viewWillLayoutSubviews` / `viewDidLayoutSubviews`: every layout pass, so keep them cheap and idempotent
 - `viewDidAppear` / `viewWillDisappear` / `viewDidDisappear`: start or stop things that should only run on screen (analytics, timers, camera)
-- `updateProperties()` (iOS 26+): runs before `layoutSubviews`; request it with `setNeedsUpdateProperties()`. Exists on both `UIView` and `UIViewController`
-- Automatic observation tracking (on by default in iOS 26; opt in on iOS 18 with the `UIObservationTrackingEnabled` Info.plist key): reading `@Observable` properties in `updateProperties()`, `layoutSubviews`, `viewWillLayoutSubviews` and similar methods makes UIKit invalidate and re-run them when those properties change
+- `updateProperties()`: runs before `layoutSubviews`; request it with `setNeedsUpdateProperties()`. Exists on both `UIView` and `UIViewController`
+- Automatic observation tracking (on by default): reading `@Observable` properties in `updateProperties()`, `layoutSubviews`, `viewWillLayoutSubviews` and similar methods makes UIKit invalidate and re-run them when those properties change
 - UIView side: `init` → `willMove(toSuperview:)` / `didMoveToSuperview` → `didMoveToWindow` → `layoutSubviews` → `draw(_:)` (only if needed)
 
 **Related to check:** Layout cycle, View controller containment, Auto Layout, UITraitCollection (automatic trait tracking), Observation (`@Observable`), Memory warnings
@@ -1404,9 +1404,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - **Per property, per method:** only properties actually read during that call are tracked, and a change re-runs only the pass that read it (properties → `updateProperties`, geometry → layout)
-- **Tracked methods** include `updateProperties()` (iOS 26+) on views and view controllers, `layoutSubviews()`, `viewWillLayoutSubviews()` / `viewDidLayoutSubviews()`, `updateConstraints()`, `draw(_:)`, and configuration updates such as a button's or cell's `configurationUpdateHandler` and `updateConfiguration(using:)`
+- **Tracked methods** include `updateProperties()` on views and view controllers, `layoutSubviews()`, `viewWillLayoutSubviews()` / `viewDidLayoutSubviews()`, `updateConstraints()`, `draw(_:)`, and configuration updates such as a button's or cell's `configurationUpdateHandler` and `updateConfiguration(using:)`
 - **Coalesced:** many changes in one run-loop turn produce one update; nothing runs synchronously inside the setter
-- **Manual requests** still exist: `setNeedsUpdateProperties()` and `updatePropertiesIfNeeded()` (iOS 26+), alongside `setNeedsLayout()` / `layoutIfNeeded()`
+- **Manual requests** still exist: `setNeedsUpdateProperties()` and `updatePropertiesIfNeeded()`, alongside `setNeedsLayout()` / `layoutIfNeeded()`
 - **Same model in both frameworks:** one `@MainActor @Observable` class can drive a SwiftUI view and a UIKit view controller during a migration
 
 **Related to check:** Layout cycle (`updateProperties`, `setNeedsLayout`), View lifecycle, Observable macro, ObservableObject and `@Published`, UITraitCollection (automatic trait tracking), Cell reuse (`configurationUpdateHandler`), MVVM
@@ -1431,7 +1431,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `translatesAutoresizingMaskIntoConstraints = false` for views you constrain in code, or the autoresizing mask adds conflicting constraints
 - Priorities (1–1000) let optional constraints break; intrinsic size adds hugging and compression-resistance constraints
 - The engine runs as part of the layout pass: constraint changes mark layout dirty, and frames are set in `layoutSubviews`
-- Guides: `safeAreaLayoutGuide`, `layoutMarginsGuide`, `readableContentGuide`, `keyboardLayoutGuide`, and in iOS 26 corner-adaptive guides from `layoutGuide(for:)`
+- Guides: `safeAreaLayoutGuide`, `layoutMarginsGuide`, `readableContentGuide`, `keyboardLayoutGuide`, and corner-adaptive guides from `layoutGuide(for:)`
 
 **Related to check:** Layout cycle, Intrinsic content size, Constraint priority, Stack views, Safe area, Size classes, Keyboard handling
 
@@ -1515,7 +1515,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** The safe area is the part of a view that isn't covered by system UI or hardware: the status bar, the Dynamic Island, the home indicator, rounded display corners, and the navigation, tab and toolbars your own containers add. Interactive content and text should sit inside it, while backgrounds and scrolling content extend to the edges and flow under the bars, which matters more with Liquid Glass bars in iOS 26.
+**Short answer:** The safe area is the part of a view that isn't covered by system UI or hardware: the status bar, the Dynamic Island, the home indicator, rounded display corners, and the navigation, tab and toolbars your own containers add. Interactive content and text should sit inside it, while backgrounds and scrolling content extend to the edges and flow under the bars, which matters more with Liquid Glass bars.
 
 **Key points:**
 
@@ -1523,8 +1523,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `additionalSafeAreaInsets` on a view controller adds your own chrome (e.g. a custom bottom player bar) so children lay out around it
 - Layout margins sit inside the safe area by default (`insetsLayoutMarginsFromSafeArea`); `directionalLayoutMargins` and `readableContentGuide` for text
 - Scroll views apply the safe area as `adjustedContentInset` (`contentInsetAdjustmentBehavior`), so content starts below the bars but scrolls under them
-- iOS 26+: `layoutGuide(for: .safeArea(cornerAdaptation:))` and `.margins(cornerAdaptation:)` return guides that also avoid window corners (rounded window corners and window controls on iPadOS 26), adapting along the axis you choose. `edgeInsets(for:)` reads the same region as insets
-- Liquid Glass (iOS 26): standard bars are translucent glass; content should scroll beneath them. `UIBackgroundExtensionView` (iOS 26+) extends content under a sidebar or inspector
+- Corner-adaptive guides: `layoutGuide(for: .safeArea(cornerAdaptation:))` and `.margins(cornerAdaptation:)` return guides that also avoid window corners (rounded window corners and window controls on iPadOS 26), adapting along the axis you choose. `edgeInsets(for:)` reads the same region as insets
+- Liquid Glass: standard bars are translucent glass; content should scroll beneath them. `UIBackgroundExtensionView` extends content under a sidebar or inspector
 
 **Related to check:** Auto Layout, Layout margins, Scroll view content insets, Keyboard handling (`keyboardLayoutGuide`), Liquid Glass bars, Rotation and orientation
 
@@ -1639,7 +1639,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Two traits: `horizontalSizeClass` and `verticalSizeClass`, each `.compact`, `.regular` or `.unspecified`
 - They change at runtime: rotation, iPad windowing (iPadOS 26 windows resize freely), Slide Over, iPhone Duo folding and unfolding, iPhone Mirroring resizing
-- React with automatic trait tracking (read them in `viewWillLayoutSubviews` / `layoutSubviews` / `updateProperties()` in iOS 26+) or `registerForTraitChanges([UITraitHorizontalSizeClass.self])`
+- React with automatic trait tracking (read them in `viewWillLayoutSubviews` / `layoutSubviews` / `updateProperties()`) or `registerForTraitChanges([UITraitHorizontalSizeClass.self])`
 - `traitOverrides.horizontalSizeClass` forces a size class for a subtree (e.g. a sidebar column that should lay out compact)
 - System containers already adapt: `UISplitViewController` collapses in compact width; `UITabBarController` with `.sidebarAdaptable` shows a sidebar in regular width
 - SwiftUI: `@Environment(\.horizontalSizeClass)`
@@ -1661,11 +1661,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- **Size:** `view.bounds`, safe-area and layout-margin guides, or `windowScene.effectiveGeometry.coordinateSpace.bounds` (iOS 26+) for the scene. Never `UIScreen.main.bounds`
+- **Size:** `view.bounds`, safe-area and layout-margin guides, or `windowScene.effectiveGeometry.coordinateSpace.bounds` for the scene. Never `UIScreen.main.bounds`
 - **Scale:** `traitCollection.displayScale` for pixel math (thumbnails, Metal drawables, hairlines), not `UIScreen.main.scale`
 - **The screen, if you really need it:** `view.window?.windowScene?.screen`
 - **Decisions:** size classes for structure, measured width for detail; in compositional layout, `layoutEnvironment.container.effectiveContentSize`
-- **Changes:** `viewWillTransition(to:with:)` fires for every size change, not only rotation; trait changes arrive through automatic trait tracking (`viewWillLayoutSubviews`, `updateProperties()` in iOS 26+) or `registerForTraitChanges`
+- **Changes:** `viewWillTransition(to:with:)` fires for every size change, not only rotation; trait changes arrive through automatic trait tracking (`viewWillLayoutSubviews`, `updateProperties()`) or `registerForTraitChanges`
 - **SDK tiers on iPhone Duo:** an app built with the iOS 26 SDK runs centered with empty space around it, the iOS 27 SDK resizes to fill most of the inner display, and the iOS 27.1 SDK runs edge to edge with vertical toolbars and tab bars
 
 **Related to check:** Size classes, Rotation and orientation, UITraitCollection, Safe area, Compositional layout, iPhone Duo poses and vertical bars, Discrete resizing and `UIRequiresFullScreen`, Scene life-cycle migration, SwiftUI adaptive layout for iPhone Duo
@@ -1733,11 +1733,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- Request: `setNeedsUpdateConstraints()`, `setNeedsLayout()`, `setNeedsDisplay()`, and in iOS 26 `setNeedsUpdateProperties()`. Cheap, coalesced, deferred
-- Force now: `updateConstraintsIfNeeded()`, `layoutIfNeeded()`, `updatePropertiesIfNeeded()` (iOS 26+). Use when you need current frames immediately, e.g. inside an animation block
-- Override points: `updateProperties()` (iOS 26+) for content and styling; `layoutSubviews` / `viewWillLayoutSubviews` for geometry; `draw(_:)` for custom drawing only
+- Request: `setNeedsUpdateConstraints()`, `setNeedsLayout()`, `setNeedsDisplay()` and `setNeedsUpdateProperties()`. Cheap, coalesced, deferred
+- Force now: `updateConstraintsIfNeeded()`, `layoutIfNeeded()`, `updatePropertiesIfNeeded()`. Use when you need current frames immediately, e.g. inside an animation block
+- Override points: `updateProperties()` for content and styling; `layoutSubviews` / `viewWillLayoutSubviews` for geometry; `draw(_:)` for custom drawing only
 - What triggers layout: bounds or size changes (rotation, window resize), adding or removing subviews, constraint changes, intrinsic size invalidation, trait changes
-- Automatic tracking: traits read in layout methods (iOS 18) and `@Observable` properties read in `updateProperties()` / layout methods (iOS 26; opt in on iOS 18 with `UIObservationTrackingEnabled`) re-invalidate the right pass automatically
+- Automatic tracking: traits read in layout methods and `@Observable` properties read in `updateProperties()` / layout methods re-invalidate the right pass automatically
 
 **Related to check:** Auto Layout, View lifecycle, Draw cycle (`setNeedsDisplay`), Intrinsic content size, UIView animations, Observation in UIKit
 
@@ -1833,7 +1833,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Appearance callbacks (`viewWillAppear`, `viewIsAppearing`, …) are forwarded automatically; for custom transitions set `shouldAutomaticallyForwardAppearanceMethods = false` and call `beginAppearanceTransition` / `endAppearanceTransition`
 - Swap children with `transition(from:to:duration:options:animations:completion:)`
 - Traits for a child: `child.traitOverrides` (replaces the deprecated `setOverrideTraitCollection(_:forChild:)`)
-- Delegation of system decisions: `childForStatusBarStyle`, `childForHomeIndicatorAutoHidden`, and in iOS 26 `childForInterfaceOrientationLock`
+- Delegation of system decisions: `childForStatusBarStyle`, `childForHomeIndicatorAutoHidden` and `childForInterfaceOrientationLock`
 - SwiftUI: `UIHostingController` as a child; `sizingOptions = .intrinsicContentSize` when the parent should size around it
 
 **Related to check:** View lifecycle, UISplitViewController, UIHostingController interop, UITraitCollection, Rotation and orientation, SwiftUI `ArrangementView`
@@ -1856,9 +1856,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Whole screen:** push `UIHostingController`; the hosted view's `.navigationTitle` and `.toolbar` fill the UIKit navigation item, so don't wrap it in another `NavigationStack`
 - **Part of a screen:** `addChild` → add and constrain `host.view` → `didMove(toParent:)`; `sizingOptions` `.intrinsicContentSize` (self-sizing in Auto Layout) or `.preferredContentSize` (popovers, sheets)
 - **Cells:** `cell.contentConfiguration = UIHostingConfiguration { Row(item) }` with `.margins(_:_:)`, `.background { }`, `.minSize(width:height:)`; UIKit keeps reuse, selection and swipe actions
-- **Data:** pass an `@Observable` model as a plain property; the same model can update UIKit through automatic observation tracking (iOS 26, or iOS 18 with `UIObservationTrackingEnabled`)
+- **Data:** pass an `@Observable` model as a plain property; the same model can update UIKit through automatic observation tracking (on by default)
 - **Safe areas:** the hosting controller applies safe-area insets itself; set `safeAreaRegions = []` when the host is already inside safe content and you see double insets
-- **iOS 26+:** a UIKit app can open SwiftUI scenes through a `UIHostingSceneDelegate` and `UISceneSessionActivationRequest(hostingDelegateClass:)`
+- **SwiftUI scenes:** a UIKit app can open SwiftUI scenes through a `UIHostingSceneDelegate` and `UISceneSessionActivationRequest(hostingDelegateClass:)`
 
 **Related to check:** View controller containment, Cell reuse (`UIHostingConfiguration`), UIViewRepresentable (the other direction), Automatic observation tracking in UIKit, Navigation architecture / coordinators, Migration strategy, Safe area
 
@@ -2017,9 +2017,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- `view.keyboardLayoutGuide.topAnchor`: the main anchor. With no keyboard, it sits at the bottom of the safe area (`usesBottomSafeArea`, settable since iOS 17)
+- `view.keyboardLayoutGuide.topAnchor`: the main anchor. With no keyboard, it sits at the bottom of the safe area (`usesBottomSafeArea`)
 - `followsUndockedKeyboard = true` to track floating and split keyboards on iPad; then use the guide's tracking constraints (`setConstraints(_:activeWhenNearEdge:)`) for edge-specific layouts
-- `keyboardDismissPadding` (iOS 17) adds space above the keyboard for interactive dismissal
+- `keyboardDismissPadding` adds space above the keyboard for interactive dismissal
 - Dismissal: `scrollView.keyboardDismissMode = .interactive` or `.interactiveWithAccessory`; `view.endEditing(true)` or `resignFirstResponder()`
 - `inputAccessoryView` for a toolbar that rides on the keyboard; `inputView` to replace the keyboard
 - Legacy notifications: `keyboardFrameEndUserInfoKey` is in **screen coordinates**; convert with `view.convert(frame, from: screen.coordinateSpace)` and use the overlap, not the raw height
@@ -2038,7 +2038,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** In iOS 27 I treat rotation as just one kind of size change. iPhone apps now resize in iPhone Mirroring, on iPad and on iPhone Duo, and iPad windows resize freely, so the layout should respond to the **available width and height** (size classes, view bounds, `viewWillTransition(to:with:)`), never to device orientation. Orientation itself is a *preference*: `supportedInterfaceOrientations` says what you allow, `setNeedsUpdateOfSupportedInterfaceOrientations()` tells the system it changed, and `prefersInterfaceOrientationLocked` (iOS 26) asks to lock it temporarily, for example during a game.
+**Short answer:** In iOS 27 I treat rotation as just one kind of size change. iPhone apps now resize in iPhone Mirroring, on iPad and on iPhone Duo, and iPad windows resize freely, so the layout should respond to the **available width and height** (size classes, view bounds, `viewWillTransition(to:with:)`), never to device orientation. Orientation itself is a *preference*: `supportedInterfaceOrientations` says what you allow, `setNeedsUpdateOfSupportedInterfaceOrientations()` tells the system it changed, and `prefersInterfaceOrientationLocked` asks to lock it temporarily, for example during a game.
 
 **Key points:**
 
@@ -2046,8 +2046,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Changing what's allowed at runtime: update the override, call `setNeedsUpdateOfSupportedInterfaceOrientations()`, and optionally `windowScene.requestGeometryUpdate(.iOS(interfaceOrientations:))`
 - `viewWillTransition(to:with:)` fires for **any** size change (rotation, window resize, split view), with a coordinator for animating alongside
 - Decide landscape-like layout with `size.width > size.height`, not `UIDevice.current.orientation` (physical device, includes face up/down, and wrong for a windowed app)
-- `prefersInterfaceOrientationLocked` (iOS 26+) plus `setNeedsUpdateOfPrefersInterfaceOrientationLocked()`; the system only locks when the scene is full screen, centered and unobstructed. Check `effectiveGeometry.isInterfaceOrientationLocked`
-- `windowScene(_:didUpdateEffectiveGeometry:)` (iOS 26+) reports scene size and orientation changes; `effectiveGeometry.isInteractivelyResizing` tells you a live resize is in progress
+- `prefersInterfaceOrientationLocked` plus `setNeedsUpdateOfPrefersInterfaceOrientationLocked()`; the system only locks when the scene is full screen, centered and unobstructed. Check `effectiveGeometry.isInterfaceOrientationLocked`
+- `windowScene(_:didUpdateEffectiveGeometry:)` reports scene size and orientation changes; `effectiveGeometry.isInteractivelyResizing` tells you a live resize is in progress
 - **`UIRequiresFullScreen` no longer opts out of resizing** with the iOS 27 SDK, on iPhone or iPad (TN3192). The system resizes the scene *discretely* instead: no live resize during the drag, then a single jump to the new size
 
 **Related to check:** Size classes, UITraitCollection, Safe area, UIScene multi-window, View controller containment (`childForInterfaceOrientationLock`), SwiftUI `ArrangementView` (iOS 27.1+)
@@ -2068,9 +2068,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - **What changed:** the key used to be an iPad multitasking opt-out; with the iOS 27 SDK it means "resize me in steps", on iPhone (iPhone Mirroring, iPhone Duo, iPhone apps on iPad) and iPad
-- **How you see it:** `windowScene(_:didUpdateEffectiveGeometry:)` (iOS 26+) with the new bounds; `effectiveGeometry.isInteractivelyResizing` (iOS 26+) tells you whether a drag is still in progress
-- **Old behavior on older systems:** `UIRequiresFullScreenIgnoredStartingWithVersion` in the Info.plist keeps the previous full-screen behavior on earlier OS versions while you adopt resizing on new ones
-- **The real replacements:** support resizing; set `windowScene.sizeRestrictions?.minimumSize` (`UISceneSizeRestrictions`, a preference the system may clamp) when content has a true minimum; override `prefersInterfaceOrientationLocked` (iOS 26+) for a temporary orientation lock, which the system honors only when the scene is full screen
+- **How you see it:** `windowScene(_:didUpdateEffectiveGeometry:)` with the new bounds; `effectiveGeometry.isInteractivelyResizing` tells you whether a live resize is in progress. With discrete resizing the bounds change once, after the drag, and Apple doesn't document whether the flag is set during that drag, so guard on it (as TN3192's sample does) and act on the final size
+- **Old behavior on older systems:** `UIRequiresFullScreenIgnoredStartingWithVersion` in the Info.plist (iOS 26.2+, a version string such as `26`) keeps the previous full-screen behavior on earlier OS versions; from that version on, the system ignores `UIRequiresFullScreen` and the app resizes normally
+- **The real replacements:** support resizing; set `windowScene.sizeRestrictions?.minimumSize` (`UISceneSizeRestrictions`, a preference the system may clamp) when content has a true minimum; override `prefersInterfaceOrientationLocked` for a temporary orientation lock, which the system honors only when the scene is full screen
 - **Related iOS 27 change:** a launch screen is required for App Store submission
 
 **Related to check:** Rotation and orientation (`prefersInterfaceOrientationLocked`, `viewWillTransition`), Resizable iPhone apps, UIScene multi-window (`effectiveGeometry`), Scene life-cycle migration, iPhone Duo poses and vertical bars, Metal and game loops
@@ -2109,13 +2109,13 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Layout decides *where* views are (frames), and display decides *what* their pixels look like. UIKit doesn't do either immediately: you invalidate with `setNeedsLayout()` or `setNeedsDisplay()`, and once per run-loop turn UIKit runs the update passes top-down, in order: constraints (`updateConstraints`), layout (`layoutSubviews`), then display (`draw(_:)` or layer contents). iOS 26 adds a properties pass, `updateProperties()`, that is coalesced with the next layout pass and runs before `layoutSubviews()`; it's where you push model state into views.
+**Short answer:** Layout decides *where* views are (frames), and display decides *what* their pixels look like. UIKit doesn't do either immediately: you invalidate with `setNeedsLayout()` or `setNeedsDisplay()`, and once per run-loop turn UIKit runs the update passes top-down, in order: constraints (`updateConstraints`), layout (`layoutSubviews`), then display (`draw(_:)` or layer contents).
 
 **Key points:**
 
-- Invalidate: `setNeedsUpdateConstraints()`, `setNeedsUpdateProperties()` (iOS 26+), `setNeedsLayout()`, `setNeedsDisplay()`
-- Force now: `updateConstraintsIfNeeded()`, `updatePropertiesIfNeeded()` (iOS 26+), `layoutIfNeeded()`; there is no "display if needed" you should call
-- Order per frame: constraints and properties (iOS 26+), then layout, then display; the render server composites afterwards
+- Invalidate: `setNeedsUpdateConstraints()`, `setNeedsUpdateProperties()`, `setNeedsLayout()`, `setNeedsDisplay()`
+- Force now: `updateConstraintsIfNeeded()`, `updatePropertiesIfNeeded()`, `layoutIfNeeded()`; there is no "display if needed" you should call
+- Order per frame: constraints and properties, then layout, then display; the render server composites afterwards
 - Layout runs when bounds, constraints, subviews or traits change; `draw(_:)` runs only when content is invalidated (or `contentMode = .redraw` and the bounds change)
 - `draw(_:)` allocates a backing store the size of the view × scale, so it costs memory
 
@@ -2208,10 +2208,10 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - `didReceiveMemoryWarning()`: call `super`, then release caches. Since iOS 6, UIKit no longer unloads view controllers' views for you (`viewDidUnload` is long gone)
-- App-wide caches observe the notification or are owned by an object that gets the app delegate callback; iOS 26 adds typed main-actor messages (`addObserver(of: UIApplication.shared, for: .didReceiveMemoryWarning)`)
+- App-wide caches observe the notification or are owned by an object that gets the app delegate callback; typed main-actor messages work too (`addObserver(of: UIApplication.shared, for: .didReceiveMemoryWarning)`)
 - `NSCache` evicts under memory pressure on its own; set `countLimit` / `totalCostLimit`. A plain `Dictionary` cache never shrinks
 - `os_proc_available_memory()` tells you how much headroom the process has before its limit
-- iOS 27 adds `systemPrefersReducedResourceUsage` (iOS 27+) on `UIApplication` and as a trait: a broader signal to choose lighter work (lower-resolution assets, less prefetching), not a substitute for handling warnings
+- `systemPrefersReducedResourceUsage` (iOS 27+) on `UIApplication` and as a trait: a broader signal to choose lighter work (lower-resolution assets, less prefetching), not a substitute for handling warnings
 - Backgrounding: in `sceneDidEnterBackground`, persist state and release large resources (decoded images, media buffers); apps with smaller suspended footprints are less likely to be terminated
 
 **Related to check:** ARC, NSCache, Image downsampling, UIApplication lifecycle, Out-of-memory terminations (jetsam), MetricKit
@@ -2329,8 +2329,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Display: `preferredDisplayMode` (`.oneBesideSecondary`, `.oneOverSecondary`, `.secondaryOnly`, …) and `preferredSplitBehavior` (`.tile`, `.overlay`, `.displace`); `show(_:)` / `hide(_:)` columns
 - `displayModeButtonVisibility` controls the system sidebar toggle (column-style split views add it for you)
 - Collapse and expand are driven by size class; the delegate's `splitViewController(_:topColumnForCollapsingToProposedTopColumn:)` picks what the user sees when collapsing, `splitViewController(_:displayModeForExpandingToProposedDisplayMode:)` when expanding
-- iOS 26+: `.inspector` column with `preferredInspectorColumnWidth`, `minimumInspectorColumnWidth` and `maximumInspectorColumnWidth`; `isShowing(_:)` to query a column; `didShowColumn` / `didHideColumn` delegate callbacks; width properties for the secondary column
-- Liquid Glass (iOS 26): the sidebar floats over content; use `UIBackgroundExtensionView` (iOS 26+) to let hero content extend beneath it
+- Inspector: `.inspector` column with `preferredInspectorColumnWidth`, `minimumInspectorColumnWidth` and `maximumInspectorColumnWidth`; `isShowing(_:)` to query a column; `didShowColumn` / `didHideColumn` delegate callbacks; width properties for the secondary column
+- Liquid Glass: the sidebar floats over content; use `UIBackgroundExtensionView` to let hero content extend beneath it
 
 **Related to check:** Size classes, UITraitCollection, View controller containment, UIScene multi-window, Tab bar sidebar (`UITab`), SwiftUI `NavigationSplitView` and `ArrangementView`
 
@@ -2345,17 +2345,17 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Since iOS 18, you describe a tab bar controller's content as `UITab` objects instead of handing it an array of view controllers with `tabBarItem`s. A `UITab` carries its title, image, badge and identifier and creates its view controller lazily through a provider closure; a `UITabGroup` nests tabs, which the controller shows as a section in a **sidebar** on iPad and in wide windows, while compact widths still get a tab bar.
+**Short answer:** You describe a tab bar controller's content as `UITab` objects instead of handing it an array of view controllers with `tabBarItem`s. A `UITab` carries its title, image, badge and identifier and creates its view controller lazily through a provider closure; a `UITabGroup` nests tabs, which the controller shows as a section in a **sidebar** on iPad and in wide windows, while compact widths still get a tab bar.
 
 **Key points:**
 
 - **`UITab(title:image:identifier:viewControllerProvider:)`**: the provider runs lazily when the tab is first shown; `viewController` gives you the created controller later, and `UIViewController.tab` goes the other way
 - **`UITabGroup(title:image:identifier:children:viewControllerProvider:)`**: a sidebar section; `allowsReordering`, `displayOrder`, `managingNavigationController` (children push into one navigation stack), `sidebarActions`
-- **`UISearchTab`**: a system-styled search tab; `automaticallyActivatesSearch` (iOS 26+) focuses the field when selected and returns to the previous tab on cancel
+- **`UISearchTab`**: a system-styled search tab; `automaticallyActivatesSearch` focuses the field when selected and returns to the previous tab on cancel
 - **`mode`**: `.automatic` (sidebar if any tab is a group and the platform supports it), `.tabBar`, `.tabSidebar`; `sidebar` for the sidebar object itself
 - **Customization:** `UITab.Placement` (`.default`, `.optional`, `.movable`, `.pinned`, `.fixed`, `.sidebarOnly`), `allowsHiding`, `isHiddenByDefault`, `customizationIdentifier` for persistence, `compactTabIdentifiers` to filter what compact widths show
 - **Selection:** `selectedTab`, `tab(forIdentifier:)`, delegate `tabBarController(_:shouldSelectTab:)` / `didSelectTab:previousTab:`
-- **iOS 26+:** `tabBarMinimizeBehavior` (`.onScrollDown`, `.onScrollUp`, `.never`; minimizing is iPhone only), `bottomAccessory = UITabAccessory(contentView:)`, the `tabAccessoryEnvironment` trait (`.regular` above the bar, `.inline` beside the minimized bar)
+- **Liquid Glass tab bar:** `tabBarMinimizeBehavior` (`.onScrollDown`, `.onScrollUp`, `.never`; minimizing is iPhone only), `bottomAccessory = UITabAccessory(contentView:)`, the `tabAccessoryEnvironment` trait (`.regular` above the bar, `.inline` beside the minimized bar)
 - **iOS 27+:** `prominentTabIdentifier` gives one tab prominent treatment (when it's nil, a search tab with `automaticallyActivatesSearch` gets it); `performBatchUpdates(_:)` coalesces several tab changes into one animated update
 
 **Related to check:** UISplitViewController, UINavigationBar customization, Liquid Glass (`UIGlassEffect`), SwiftUI TabView and `Tab`, Size classes, UITraitCollection, Safe area, iPhone Duo poses and vertical bars
@@ -2403,7 +2403,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Scroll indicators: `verticalScrollIndicatorInsets` / `horizontalScrollIndicatorInsets` (the `scrollIndicatorInsets` getter is deprecated; its setter still sets both); `automaticallyAdjustsScrollIndicatorInsets` keeps them in sync with the safe area
 - The initial "scrolled to top" offset is `-adjustedContentInset.top`, not `0`
 - `contentLayoutGuide` (content size) and `frameLayoutGuide` (visible frame) for Auto Layout inside scroll views; that's separate from insets
-- iOS 26+: `topEdgeEffect` / `bottomEdgeEffect` (`UIScrollEdgeEffect`) style the blur/fade where content meets a bar (`.automatic`, `.soft`, `.hard`)
+- Scroll edge effects: `topEdgeEffect` / `bottomEdgeEffect` (`UIScrollEdgeEffect`) style the blur/fade where content meets a bar (`.automatic`, `.soft`, `.hard`)
 
 **Related to check:** Safe area, Keyboard handling, UIRefreshControl, Scroll view delegate, Liquid Glass bars (UINavigationBar customization)
 
@@ -2496,7 +2496,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - App delegate: `application(_:didFinishLaunchingWithOptions:)` for process setup (logging, DI container, `BGTaskScheduler` registration); `application(_:configurationForConnecting:options:)`; `application(_:didDiscardSceneSessions:)`; `applicationDidReceiveMemoryWarning`; `applicationWillTerminate` (not guaranteed to run)
 - Scene delegate: `scene(_:willConnectTo:options:)` builds the window and handles launch URLs or activities; `sceneWillEnterForeground`, `sceneDidBecomeActive`, `sceneWillResignActive`, `sceneDidEnterBackground`
 - Once scenes are adopted, `applicationDidBecomeActive` and friends are **not called**. For app-wide observers, use `UIApplication.didBecomeActiveNotification` and the other app-level notifications
-- URL handling moves too: `application(_:open:options:)` is deprecated (iOS 26) in favour of `scene(_:openURLContexts:)` plus `connectionOptions.urlContexts` on cold launch
+- URL handling moves too: `application(_:open:options:)` is deprecated since iOS 26 (warning) in favour of `scene(_:openURLContexts:)` plus `connectionOptions.urlContexts` on cold launch
 - SwiftUI `App` life-cycle apps already use scenes and meet the requirement
 
 **Related to check:** UIScene multi-window, State restoration (`stateRestorationActivity(for:)`), Memory warnings, Background tasks, App launch time
@@ -2520,7 +2520,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, previous) in … }` replaces `traitCollectionDidChange`; registration is tied to the object's lifetime
 - `traitOverrides` on a view, view controller, window or window scene changes traits for everything below it (replaces `setOverrideTraitCollection(_:forChild:)`)
 - Custom traits: a `UITraitDefinition`, plus accessors on `UITraitCollection` and `UIMutableTraits`. They can bridge to SwiftUI's environment with `UITraitBridgedEnvironmentKey`
-- iOS 27 adds `systemPrefersReducedResourceUsage` (iOS 27+), a trait that tells you the system would like lighter work
+- `systemPrefersReducedResourceUsage` (iOS 27+) is a trait that tells you the system would like lighter work
 - `traitCollection.displayScale` replaces `UIScreen.main.scale`
 
 **Related to check:** Size classes, Dynamic Type, UISplitViewController, View lifecycle (`viewIsAppearing`), Rotation and orientation, SwiftUI environment
@@ -2536,13 +2536,13 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Since iOS 26, the first answer is "customize as little as possible": apps rebuilt with the iOS 26+ SDK get **Liquid Glass** navigation bars automatically. The bar background disappears, content scrolls underneath with a scroll edge effect, and bar button items float in shared glass capsules.
+**Short answer:** The first answer is "customize as little as possible": apps rebuilt with the iOS 26 SDK or later get **Liquid Glass** navigation bars automatically. The bar background disappears, content scrolls underneath with a scroll edge effect, and bar button items float in shared glass capsules.
 
 **Key points:**
 
 - **Appearance objects:** `UINavigationBarAppearance` for the bar, set on `navigationBar` (all screens in that controller) or on `navigationItem` (one screen, overrides the bar). `UIBarButtonItemAppearance` for item text styling.
 - **Four slots:** `standardAppearance` (scrolled), `scrollEdgeAppearance` (content at the top edge), `compactAppearance` / `compactScrollEdgeAppearance` (compact-height bars).
-- **Liquid Glass (iOS 26+):** items are grouped automatically into shared glass backgrounds. `UIBarButtonItem.fixedSpace()` splits a group, `hidesSharedBackground = true` removes the capsule behind one item (e.g. an avatar), and the `.prominent` style makes a tinted, stand-alone primary action. `navigationItem.subtitle` and `largeSubtitle` add a second title line, and `badge` puts a count on an item.
+- **Liquid Glass:** items are grouped automatically into shared glass backgrounds. `UIBarButtonItem.fixedSpace()` splits a group, `hidesSharedBackground = true` removes the capsule behind one item (e.g. an avatar), and the `.prominent` style makes a tinted, stand-alone primary action. `navigationItem.subtitle` and `largeSubtitle` add a second title line, and `badge` puts a count on an item.
 - **iOS 27+:** `visibilityPriority` keeps important items visible when space is tight (others move to overflow); `navigationItem.navigationBarMinimization` controls how the bar minimizes on scroll; `UIBarAppearance.overrideUserInterfaceStyle` forces light or dark bar content.
 - **iPhone Duo (iOS 27.1 SDK):** apps run edge to edge and toolbars and tab bars lay out in a **vertical bar** below the status bar. `UIBarButtonItem.axisBehavior` (`.verticalPreferred`, `.horizontalOnly`), `navigationItem.verticalBarCompressionBehavior`, and overriding `preferredVerticalBarBehavior` to return `.disabled` (only for screens like a full-screen player or calculator) are the controls (all iOS 27.1+).
 
@@ -2559,14 +2559,14 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Start by *removing* things: an app rebuilt with the iOS 26+ SDK already gets Liquid Glass in navigation bars, toolbars, tab bars, sheets, menus and standard controls, and the most common migration bug is old customization (opaque bar appearances, background images, custom tab bar backgrounds) hiding it. For custom floating controls, glass is a `UIVisualEffect`: put a `UIGlassEffect` (iOS 26+) in a `UIVisualEffectView`, add content to its `contentView`, and group neighbouring glass views inside a `UIVisualEffectView` whose effect is `UIGlassContainerEffect` so they sample together and blend.
+**Short answer:** Start by *removing* things: an app rebuilt with the iOS 26 SDK or later already gets Liquid Glass in navigation bars, toolbars, tab bars, sheets, menus and standard controls, and the most common migration bug is old customization (opaque bar appearances, background images, custom tab bar backgrounds) hiding it. For custom floating controls, glass is a `UIVisualEffect`: put a `UIGlassEffect` in a `UIVisualEffectView`, add content to its `contentView`, and group neighbouring glass views inside a `UIVisualEffectView` whose effect is `UIGlassContainerEffect` so they sample together and blend.
 
 **Key points:**
 
 - **`UIGlassEffect(style:)`** with `.regular` (default, keeps content legible) or `.clear` (for controls over rich media; add dimming beneath); `isInteractive` for touch response; `tintColor` for emphasis
 - **`UIGlassContainerEffect`**: `spacing` sets how close glass views must be before their shapes blend; glass views go in the container's `contentView`
-- **Shape:** `cornerConfiguration` on `UIView` (iOS 26+): `.capsule()`, `.corners(radius: .fixed(16))`, or `.containerConcentric(minimum:)` so a nested view's corners stay concentric with its container
-- **Buttons:** `UIButton.Configuration.glass()`, `.prominentGlass()`, `.clearGlass()`, `.prominentClearGlass()` (iOS 26+); bar button items get glass automatically, with `.prominent` style for the primary action
+- **Shape:** `cornerConfiguration` on `UIView`: `.capsule()`, `.corners(radius: .fixed(16))`, or `.containerConcentric(minimum:)` so a nested view's corners stay concentric with its container
+- **Buttons:** `UIButton.Configuration.glass()`, `.prominentGlass()`, `.clearGlass()`, `.prominentClearGlass()`; bar button items get glass automatically, with `.prominent` style for the primary action
 - **Scroll edges:** `scrollView.topEdgeEffect` / `bottomEdgeEffect` (`.style = .soft` / `.hard`, `isHidden`); `UIScrollEdgeElementContainerInteraction` makes a custom bar over a scroll view shape the edge effect like a system bar
 - **`UIBackgroundExtensionView`**: its `contentView` (a hero image) stays in the safe area while mirrored, blurred copies fill the space under sidebars and insets
 
@@ -2637,7 +2637,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Animatable: `frame`, `bounds`, `center`, `transform`, `alpha`, `backgroundColor`, plus constraint changes via `layoutIfNeeded()`
 - `animate(springDuration:bounce:initialSpringVelocity:delay:options:)`: `bounce` 0 = critically damped, 0.15–0.3 = gentle overshoot
 - Legacy spring: `usingSpringWithDamping:initialSpringVelocity:` (harder to tune, still in older code)
-- Options: `.curveEaseInOut`, `.allowUserInteraction`, `.beginFromCurrentState`, `.repeat` + `.autoreverse`, `.transitionCrossDissolve`, `.flushUpdates` (iOS 26+)
+- Options: `.curveEaseInOut`, `.allowUserInteraction`, `.beginFromCurrentState`, `.repeat` + `.autoreverse`, `.transitionCrossDissolve`, `.flushUpdates`
 - `animateKeyframes` + `addKeyframe(withRelativeStartTime:relativeDuration:)` for choreographed steps
 - `UIView.performWithoutAnimation { }` to opt a change out of an enclosing animation
 - SwiftUI curves in UIKit: `UIView.animate(.smooth) { }` (requires `import SwiftUI`)
@@ -2678,11 +2678,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** First I check whether a built-in transition does the job. Since iOS 18, `preferredTransition = .zoom { … }` gives a fluid, interactive zoom from a source view for both push and present, including interactive dismissal by swiping, with no animator code.
+**Short answer:** First I check whether a built-in transition does the job. `preferredTransition = .zoom { … }` gives a fluid, interactive zoom from a source view for both push and present, including interactive dismissal by swiping, with no animator code.
 
 **Key points:**
 
-- Built-in: `preferredTransition = .zoom(sourceViewProvider:)` (iOS 18), `.zoom(sourceBarButtonItemProvider:)` (iOS 26+), `.crossDissolve`, `.coverVertical`, `.flipHorizontal`, `.partialCurl`
+- Built-in: `preferredTransition = .zoom(sourceViewProvider:)`, `.zoom(sourceBarButtonItemProvider:)`, `.crossDissolve`, `.coverVertical`, `.flipHorizontal`, `.partialCurl`
 - `UIViewControllerTransitioningDelegate`: `animationController(forPresented:presenting:source:)`, `animationController(forDismissed:)`, `presentationController(forPresented:presenting:source:)`
 - `UIViewControllerAnimatedTransitioning`: `transitionDuration(using:)`, `animateTransition(using:)`, optional `interruptibleAnimator(using:)`
 - Context: `containerView`, `view(forKey: .from/.to)`, `finalFrame(for:)`, `completeTransition(!transitionWasCancelled)`
@@ -2711,7 +2711,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Open a window: `activateSceneSession(for: UISceneSessionActivationRequest(userActivity:))`, which replaces `requestSceneSessionActivation(_:userActivity:options:errorHandler:)`. Close one: `requestSceneSessionDestruction(_:options:errorHandler:)`
 - Route new windows by `NSUserActivity` type: the activity arrives in `connectionOptions.userActivities`
 - iPadOS 26 windowing: every app window can be freely resized and arranged, so a scene can be any size at any time
-- iOS 26: `windowScene(_:didUpdateEffectiveGeometry:)` replaces the deprecated `didUpdateCoordinateSpace` callback for size and orientation changes
+- Geometry: `windowScene(_:didUpdateEffectiveGeometry:)` replaces the deprecated `didUpdateCoordinateSpace` callback for size and orientation changes
 
 **Related to check:** UIApplication lifecycle (TN3187 scene requirement), UISplitViewController, State restoration, Size classes, Rotation and orientation (`effectiveGeometry`)
 
@@ -2733,7 +2733,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Step 1, manifest:** `UIApplicationSceneManifest` with `UIApplicationSupportsMultipleScenes = NO` and one `UIWindowSceneSessionRoleApplication` configuration naming `$(PRODUCT_MODULE_NAME).SceneDelegate` (and `UISceneStoryboardFile` if you use a main storyboard, in which case UIKit creates the window)
 - **Step 2, window:** `UIWindow(windowScene:)` in `scene(_:willConnectTo:options:)`; `UIWindow(frame:)` is deprecated in iOS 26, and `AppDelegate.window` goes away
 - **Step 3, inputs:** launch options become `UIScene.ConnectionOptions` (`urlContexts`, `userActivities`, `shortcutItem`) on cold launch; warm launches arrive in `scene(_:openURLContexts:)`, `scene(_:continue:)` and `windowScene(_:performActionFor:completionHandler:)`
-- **Step 4, life-cycle work:** `applicationDidBecomeActive` / `WillResignActive` / `DidEnterBackground` / `WillEnterForeground` (deprecated in iOS 26) become `sceneDidBecomeActive` and friends. After adoption the app-delegate versions **aren't called at all**. App-wide observers can use `UIApplication.didEnterBackgroundNotification` and the other app-level notifications
+- **Step 4, life-cycle work:** `applicationDidBecomeActive` / `WillResignActive` / `DidEnterBackground` / `WillEnterForeground` (marked deprecated in iOS 26 in the SDK, though implementing them gives no warning) become `sceneDidBecomeActive` and friends. After adoption the app-delegate versions **aren't called at all**. App-wide observers can use `UIApplication.didEnterBackgroundNotification` and the other app-level notifications
 - **Step 5, restoration:** `stateRestorationActivity(for:)` on the scene delegate, read back from `session.stateRestorationActivity`
 - **SwiftUI apps** using the `App` life cycle already use scenes; a `UIApplicationDelegateAdaptor` app delegate is fine
 
@@ -2785,7 +2785,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Environment:** `.environment(model)` + `@Environment(Model.self) private var model`
 - **`@ObservationIgnored`** excludes a property (caches, IDs, injected services)
 - Classes only (not structs or actors); write UI models as `@MainActor @Observable final class`
-- **Outside views:** `Observations { model.count }` (iOS 26+) is an `AsyncSequence` of changes; UIKit (iOS 26+) tracks `@Observable` reads in `layoutSubviews`, `updateProperties()` and similar methods automatically
+- **Outside views:** `Observations { model.count }` is an `AsyncSequence` of changes; UIKit tracks `@Observable` reads in `layoutSubviews`, `updateProperties()` and similar methods automatically
 
 **Related to check:** ObservableObject and @Published (the legacy model and migration), @StateObject vs @ObservedObject, @State / @Binding / @Bindable, sharing models via the environment (@EnvironmentObject), Combine integration, @MainActor, SwiftData and SwiftUI (`@Model` types are observable)
 
@@ -2900,7 +2900,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `@Published` fires *before* the change (willSet); SwiftUI re-reads values on the next render pass
 - Granularity is the whole object: any `@Published` change re-renders every observing view
 - `$property` exposes a `Published.Publisher` for Combine (`debounce`, `removeDuplicates`, `sink`)
-- Still appropriate: deployment target below iOS 17, or existing Combine pipelines built on `$property`
+- Still appropriate: existing code, or Combine pipelines built on `$property` (at an iOS 26 target, deployment version is no longer a reason)
 
 **Related to check:** Observable macro (the full modern model), @StateObject vs @ObservedObject, sharing models via the environment (@EnvironmentObject), Combine integration, @MainActor
 
@@ -2948,7 +2948,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Router: `@MainActor @Observable final class Router { var path = NavigationPath() }`, owned with `@State`, shared with `.environment(router)`
 - **Zoom transition:** `.navigationTransition(.zoom(sourceID:in:))` on the destination + `.matchedTransitionSource(id:in:)` on the source
 - **Tabs:** `TabView { Tab("Home", systemImage: "house") { … } }`, `.tabViewStyle(.sidebarAdaptable)` (tab bar on iPhone, sidebar on iPad); each tab owns its own `NavigationStack`
-- With the iOS 26+ SDK, navigation and tab bars adopt Liquid Glass automatically; `.tabBarMinimizeBehavior(.onScrollDown)` (iOS 26+) shrinks the tab bar while scrolling
+- Navigation and tab bars adopt Liquid Glass automatically; `.tabBarMinimizeBehavior(.onScrollDown)` shrinks the tab bar while scrolling
 
 **Related to check:** Toolbar, Sheets and fullScreenCover, matchedGeometryEffect / zoom transition, deep linking (`onOpenURL`), coordinator pattern, `NavigationSplitView`, `ArrangementView`, `@Observable`
 
@@ -2967,11 +2967,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- **`Tab` API** (iOS 18 baseline): `Tab("Home", systemImage: "house", value: .home) { … }`; `TabView(selection: $selection)` binds to the values; `.badge(_:)` works on tabs
-- **`Tab(role: .search)`** gets the system title, icon and placement (separated from the other tabs in the iOS 26 tab bar); `.tabViewSearchActivation(.searchTabSelection)` (iOS 26+) focuses the search field when the tab is selected
+- **`Tab` API**: `Tab("Home", systemImage: "house", value: .home) { … }`; `TabView(selection: $selection)` binds to the values; `.badge(_:)` works on tabs
+- **`Tab(role: .search)`** gets the system title, icon and placement (separated from the other tabs in the iOS 26 tab bar); `.tabViewSearchActivation(.searchTabSelection)` focuses the search field when the tab is selected
 - **`TabSection`** groups tabs into sidebar sections; in a compact tab bar the section's tabs appear as ordinary tabs without the header, so keep the total small or hide some with `.defaultVisibility(.hidden, for: .tabBar)`
 - **Customization:** `.customizationID(_:)` on tabs plus `.tabViewCustomization($customization)`; `TabViewCustomization` is `Codable`, so it persists in `@AppStorage`
-- **iOS 26+:** `.tabBarMinimizeBehavior(.onScrollDown)` (or `.onScrollUp` for bottom-anchored content; iPhone only); `.tabViewBottomAccessory { }` with `@Environment(\.tabViewBottomAccessoryPlacement)` (`.expanded` above the bar, `.inline` beside the minimized bar)
+- **Liquid Glass tab bar:** `.tabBarMinimizeBehavior(.onScrollDown)` (or `.onScrollUp` for bottom-anchored content; iPhone only); `.tabViewBottomAccessory { }` with `@Environment(\.tabViewBottomAccessoryPlacement)` (`.expanded` above the bar, `.inline` beside the minimized bar)
 - **iOS 27+:** `TabRole.prominent` gives one tab prominent treatment (without one, a search tab may get it); `@Environment(\.isTabViewSidebarAvailable)` tells content whether a sidebar can appear
 
 **Related to check:** NavigationStack, Liquid Glass, Toolbar, Searchable, UIKit `UITab` and `UITabGroup`, Deep linking / navigation architecture, App storage, Adaptive layout for iPhone Duo
@@ -2996,8 +2996,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `presentationDetents([.medium, .large, .height(200), .fraction(0.3)])` + `presentationDragIndicator(.visible)`; bind `selection:` to track the detent
 - `presentationBackgroundInteraction(.enabled(upThrough: .medium))` keeps the content behind interactive (Maps-style)
 - `presentationSizing(.form / .page / .fitted)` controls size where sheets don't fill the window (iPad, Mac, large iPhone windows)
-- **Liquid Glass (iOS 26+ SDK):** glass sheet backgrounds at partial detents; `presentationBackground(_:)` replaces the glass, so use it deliberately
-- Zoom from the presenting control: `.navigationTransition(.zoom(sourceID:in:))` on the sheet content; toolbar items can be the source (iOS 26+)
+- **Liquid Glass:** glass sheet backgrounds at partial detents; `presentationBackground(_:)` replaces the glass, so use it deliberately
+- Zoom from the presenting control: `.navigationTransition(.zoom(sourceID:in:))` on the sheet content; toolbar items can be the source
 
 **Related to check:** NavigationStack, Toolbar, alert / confirmationDialog (item-bound in iOS 27), zoom transition, Inspector, `@Environment(\.dismiss)`, UIKit `UISheetPresentationController`
 
@@ -3112,7 +3112,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - `.onReceive(publisher)` runs a closure on the main thread for each value (timers, `NotificationCenter` publishers)
 - `ObservableObject` uses `objectWillChange` (a Combine publisher); `@Published` exposes `$property`
-- `@Observable` has no publishers; use `Observations { model.query }` (iOS 26+) for an `AsyncSequence` of changes
+- `@Observable` has no publishers; use `Observations { model.query }` for an `AsyncSequence` of changes
 - Bridge a publisher into async code with `publisher.values`
 - Debounce-and-search in views: `.task(id: query)` with `Task.sleep` replaces `$query.debounce(...).sink`
 
@@ -3135,7 +3135,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Layout modifiers (`padding`, `frame`) change the size that later modifiers see
 - Drawing modifiers (`background`, `overlay`, `border`) fill the size they receive at that point
-- `clipShape` clips everything above it; `.cornerRadius(_:)` is deprecated: use `.clipShape(.rect(cornerRadius:))`
+- `clipShape` clips everything above it. Older code uses `.cornerRadius(_:)`; it's soft-deprecated in Xcode 27 (builds with no warning), and the modern way is `.clipShape(.rect(cornerRadius:))`
 - `contentShape` and `allowsHitTesting` affect hit testing from that point
 - Environment modifiers (`font`, `foregroundStyle`, `tint`) flow *down* to children, so their position relative to containers matters, not to sibling modifiers
 
@@ -3314,16 +3314,16 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** It depends on whose content it is and what you need to control. For your own or tightly integrated content (help pages, terms, rich articles) on iOS 26+, SwiftUI's native `WebView` backed by an `@Observable` `WebPage` is the answer: no representable, and title, URL, progress and navigation are observable properties.
+**Short answer:** It depends on whose content it is and what you need to control. For your own or tightly integrated content (help pages, terms, rich articles), SwiftUI's native `WebView` backed by an `@Observable` `WebPage` is the answer: no representable, and title, URL, progress and navigation are observable properties.
 
 **Key points:**
 
-- **`WebView(url:)`** (iOS 26+) for the simple case; **`WebView(page)`** with a `WebPage` (iOS 26+, `import WebKit`) when you need state or control
+- **`WebView(url:)`** for the simple case; **`WebView(page)`** with a `WebPage` (`import WebKit`) when you need state or control
 - **`WebPage`** is a `@MainActor` class that conforms to `Observable`: `title`, `url`, `isLoading`, `estimatedProgress`, `backForwardList`, `hasOnlySecureContent`; `load(_:)` accepts a `URL`, `URLRequest` or HTML string and returns an async sequence of navigation events (`.committed`, `.finished`, …); `reload()`, `stopLoading()`, and `callJavaScript(_:arguments:)` is async
 - **Policies** with `WebPage.NavigationDeciding` (async `decidePolicy(for:preferences:)`), JavaScript dialogs with `DialogPresenting`, and `WebPage.Configuration` for the data store, user content controller and URL scheme handlers
 - **View modifiers:** `.webViewBackForwardNavigationGestures(_:)`, `.webViewLinkPreviews(_:)`, `.webViewScrollPosition(_:)`, `.webViewContentBackground(_:)`
 - **`SFSafariViewController`**: read-only browsing, private from your app, no JavaScript access; wrap it in `UIViewControllerRepresentable` and present it as a sheet
-- **`ASWebAuthenticationSession`**: OAuth / OIDC in a system sheet that the app can't inspect; `.https(host:path:)` callbacks (iOS 17.4+) need associated domains
+- **`ASWebAuthenticationSession`**: OAuth / OIDC in a system sheet that the app can't inspect; `.https(host:path:)` callbacks need associated domains
 
 **Related to check:** UIViewRepresentable, OAuth 2.0 flow (PKCE), App Transport Security, Observation (`@Observable`), Sheets, Deep links / universal links
 
@@ -3435,9 +3435,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - `alert("Title", isPresented: $flag) { buttons } message: { Text(...) }`
-- Item-bound (Xcode 27 SDK; back-deploys to earlier iOS): `alert("Delete?", item: $pendingDelete) { item in … }`; `T` doesn't need to be `Identifiable`
+- Item-bound (Xcode 27 SDK; also works at an iOS 26 deployment target): `alert("Delete?", item: $pendingDelete) { item in … }`; `T` doesn't need to be `Identifiable`
 - Before Xcode 27: `alert(_:isPresented:presenting:)` plus a separate Bool, or a hand-made `Binding<Bool>` derived from the optional
-- Roles: `.destructive` (red), `.cancel` (the system places it; a confirmation dialog adds one if you omit it); `.confirm` and `.close` (iOS 26+)
+- Roles: `.destructive` (red), `.cancel` (the system places it; a confirmation dialog adds one if you omit it); `.confirm` and `.close`
 - SwiftUI dismisses the dialog and resets the binding for you when any button is tapped
 
 **Related to check:** @State, @Binding, sheets and fullScreenCover, Liquid Glass popovers, error handling in view models
@@ -3461,7 +3461,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Mix styles with interpolation: `Text("Total: \(Text(price).bold())")`; `Text + Text` is deprecated in iOS 26
 - `AttributedString`: `var s = AttributedString("Hello")`, `s.font = .headline`, `s.foregroundColor = .red`, ranges via `s.range(of:)`, concatenation with `+`
 - `try AttributedString(markdown:)` for Markdown from a runtime `String`
-- Rich-text editing (iOS 26+): `TextEditor(text: $attributed, selection: $selection)`; change formatting with `transformAttributes(in: &selection)`
+- Rich-text editing: `TextEditor(text: $attributed, selection: $selection)`; change formatting with `transformAttributes(in: &selection)`
 
 **Related to check:** Text, Markdown, Localization (String Catalogs), TextEditor, UITextView / UIViewRepresentable
 
@@ -3476,13 +3476,13 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Use `.toolbar { }` with `ToolbarItem` or `ToolbarItemGroup` and a *semantic* placement (`.primaryAction`, `.cancellationAction`, `.confirmationAction`) or a positional one (`.topBarLeading`, `.topBarTrailing`, `.bottomBar`, `.keyboard`); SwiftUI then puts items in the right bar for the platform and context, and the toolbar must sit inside a `NavigationStack` to show on iOS. With the iOS 26+ SDK, toolbars are Liquid Glass: adjacent items share one glass background, `ToolbarSpacer` (iOS 26+) splits them into separate groups, and bars should have no custom background. iOS 27 adds control over what overflows when space runs out: `.visibilityPriority(_:)` on items, `.toolbarOverflowMenu { }` and the `.topBarPinnedTrailing` placement.
+**Short answer:** Use `.toolbar { }` with `ToolbarItem` or `ToolbarItemGroup` and a *semantic* placement (`.primaryAction`, `.cancellationAction`, `.confirmationAction`) or a positional one (`.topBarLeading`, `.topBarTrailing`, `.bottomBar`, `.keyboard`); SwiftUI then puts items in the right bar for the platform and context, and the toolbar must sit inside a `NavigationStack` to show on iOS. Since the iOS 26 SDK, toolbars are Liquid Glass: adjacent items share one glass background, `ToolbarSpacer` splits them into separate groups, and bars should have no custom background. iOS 27 adds control over what overflows when space runs out: `.visibilityPriority(_:)` on items, `.toolbarOverflowMenu { }` and the `.topBarPinnedTrailing` placement.
 
 **Key points:**
 
 - `ToolbarItem(placement:)`, `ToolbarItemGroup`, `.principal` for a custom title view, `.keyboard` for an input accessory bar
-- `.topBarLeading` / `.topBarTrailing` replace the deprecated `.navigationBarLeading` / `.navigationBarTrailing`
-- **iOS 26+:** `ToolbarSpacer(.fixed)` / `ToolbarSpacer(.flexible)` separate glass groups; `.sharedBackgroundVisibility(.hidden)` takes an item out of the shared glass; `.buttonStyle(.glassProminent)` for the primary action; `.tabBarMinimizeBehavior(.onScrollDown)` on a `TabView` shrinks the tab bar while scrolling
+- `.topBarLeading` / `.topBarTrailing` replace `.navigationBarLeading` / `.navigationBarTrailing`, which are soft-deprecated in Xcode 27 (they still build with no warning)
+- **Liquid Glass:** `ToolbarSpacer(.fixed)` / `ToolbarSpacer(.flexible)` separate glass groups; `.sharedBackgroundVisibility(.hidden)` takes an item out of the shared glass; `.buttonStyle(.glassProminent)` for the primary action; `.tabBarMinimizeBehavior(.onScrollDown)` on a `TabView` shrinks the tab bar while scrolling
 - **iOS 27+:** `.visibilityPriority(.high)` keeps an item visible longer when space is tight (lower-priority items move to the overflow menu first); `.toolbarOverflowMenu { }` puts actions in the overflow menu permanently; `.topBarPinnedTrailing` pins an item to the trailing edge (it only overflows when search is active and space runs out)
 - There is **no** `toolbarMinimizeBehavior`; the auto-minimize API is iOS 26's `tabBarMinimizeBehavior`
 
@@ -3671,7 +3671,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Only one view per id should be the *source* (`isSource: true`, the default) at a time
 - `properties: .frame / .size / .position` chooses what's matched; `anchor:` sets the reference point
 - **Zoom transition:** `NavigationLink` / `.sheet` / `.fullScreenCover` destination gets `.navigationTransition(.zoom(sourceID:in:))`; the tapped view gets `.matchedTransitionSource(id:in:)`
-- Toolbar items can be zoom sources too (iOS 26+), e.g. a "Compose" button that zooms into a sheet
+- Toolbar items can be zoom sources too, e.g. a "Compose" button that zooms into a sheet
 - UIKit equivalent: `preferredTransition = .zoom { context in sourceView }`
 
 **Related to check:** NavigationStack, Sheets and fullScreenCover, `PhaseAnimator`, `contentTransition`, UIKit `preferredTransition = .zoom`, view identity
@@ -3946,7 +3946,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Indefinite: `.symbolEffect(.pulse, isActive: isSyncing)`, or always-on with no `isActive`
 - `.wiggle`, `.breathe` and `.rotate` join bounce, pulse, scale and variable color
 - Swapping symbols: `.contentTransition(.symbolEffect(.replace))`; insert/remove: `.transition(.symbolEffect(.appear))`
-- Draw On / Draw Off (iOS 26+): the symbol is drawn stroke by stroke, like handwriting, for symbols with SF Symbols 7 draw annotations
+- Draw On / Draw Off: the symbol is drawn stroke by stroke, like handwriting, for symbols with SF Symbols 7 draw annotations
 
 **Related to check:** ContentTransition, Sensory feedback, PhaseAnimator, Animations, SF Symbols app (layer and draw annotations)
 
@@ -3961,16 +3961,16 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Liquid Glass is the iOS 26 design material: a translucent, light-bending layer that sits *above* content for navigation and controls, while content stays underneath. Most adoption is automatic: rebuild with the iOS 26+ SDK and standard components (navigation bars, toolbars, tab bars, sheets, menus, buttons and controls) render as glass, so the first step is removing custom bar backgrounds and opaque appearances that fight the material.
+**Short answer:** Liquid Glass is the iOS 26 design material: a translucent, light-bending layer that sits *above* content for navigation and controls, while content stays underneath. Most adoption is automatic: build with the iOS 26 SDK or later and standard components (navigation bars, toolbars, tab bars, sheets, menus, buttons and controls) render as glass, so the first step is removing custom bar backgrounds and opaque appearances that fight the material.
 
 **Key points:**
 
-- **Automatic adoption** with the iOS 26+ SDK for system bars, sheets, menus and controls; scroll views get a *scroll edge effect* under bars instead of an opaque bar background
-- **`.glassEffect(_:in:)`** (iOS 26+): defaults to `.regular` in a capsule; any `Shape` works (`.circle`, `.rect(cornerRadius:)`)
+- **Automatic adoption** with the iOS 26 SDK or later for system bars, sheets, menus and controls; scroll views get a *scroll edge effect* under bars instead of an opaque bar background
+- **`.glassEffect(_:in:)`**: defaults to `.regular` in a capsule; any `Shape` works (`.circle`, `.rect(cornerRadius:)`)
 - **`Glass` variants:** `.regular` (default, adapts for legibility), `.clear` (more transparent, for controls over rich media), `.identity` (no glass, handy for toggling); modifiers `.tint(_:)` for emphasis and `.interactive()` for touch response (scale, shimmer)
 - **`GlassEffectContainer(spacing:)`**: glass can't sample other glass, so nearby elements must share a container; elements closer than `spacing` blend together
 - **Morphing:** `.glassEffectID(_:in:)` with a `@Namespace` animates glass shapes into each other as views appear and disappear; `.glassEffectUnion(id:namespace:)` merges separate views into one shape; `.glassEffectTransition(_:)` picks `.matchedGeometry` or `.materialize`
-- **Buttons:** `.buttonStyle(.glass)` and `.glassProminent` (iOS 26+); `.glass(_:)` taking a `Glass` value needs iOS 26.1
+- **Buttons:** `.buttonStyle(.glass)` and `.glassProminent`; `.glass(_:)` taking a `Glass` value needs iOS 26.1
 - **Around content:** `.backgroundExtensionEffect()` mirrors and blurs edge content under sidebars and insets; `.scrollEdgeEffectStyle(.soft / .hard, for:)` tunes the edge effect
 
 **Related to check:** Toolbar (`ToolbarSpacer`), TabView and Tab (`tabBarMinimizeBehavior`), Design systems, UIKit Liquid Glass (`UIGlassEffect`), UINavigationBar customization, Matched geometry effect, Accessibility
@@ -4040,7 +4040,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `Timeline(entries:policy:)` with `.atEnd`, `.after(date)` or `.never`; the app forces refreshes with `WidgetCenter.shared.reloadTimelines(ofKind:)`
 - Share data with the app through an App Group (SwiftData store, `UserDefaults(suiteName:)`, files)
 - Interactive widgets: `Button(intent:)` / `Toggle(isOn:intent:)`; after `perform()` the timeline reloads
-- Controls (iOS 18): `ControlWidget` with `ControlWidgetButton` / `ControlWidgetToggle` for Control Center, the Lock Screen and the Action button
+- Controls: `ControlWidget` with `ControlWidgetButton` / `ControlWidgetToggle` for Control Center, the Lock Screen and the Action button
 - `.containerBackground(_:for: .widget)` is required; the system removes it in some contexts (StandBy, accented modes)
 - Live Activities: `ActivityConfiguration` in the same extension, started from the app with ActivityKit
 
@@ -4066,7 +4066,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `@Query(filter: #Predicate<Item> { … }, sort: \.timestamp, order: .reverse)`
 - `@Environment(\.modelContext)` to `insert`, `delete`, `save` (autosave is on for the main context)
 - **`@ModelActor`** for imports and heavy work off the main actor
-- iOS 18: `#Unique` (compound uniqueness), `#Index` (query performance), history tracking (`fetchHistory(_:)`), custom data stores
+- `#Unique` (compound uniqueness), `#Index` (query performance), history tracking (`fetchHistory(_:)`) and custom data stores, all added in iOS 18
 
 **Related to check:** @FetchRequest and Core Data, @Observable macro, Swift Concurrency (actors, Sendable), #Preview with PreviewModifier, @AppStorage, WidgetKit (App Groups)
 
@@ -4249,7 +4249,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Delegate: one listener, multiple methods, `weak` to avoid cycles, `AnyObject` protocol
 - Closure: one listener, one event; capture `[weak self]` when the closure is stored
 - NotificationCenter: many listeners, loose coupling, harder to trace and test
-- Typed messages (iOS 26+): `NotificationCenter.MainActorMessage` (observer runs on the main actor, posted from the main actor) or `AsyncMessage` (`Sendable`, delivered asynchronously)
+- Typed messages: `NotificationCenter.MainActorMessage` (observer runs on the main actor, posted from the main actor) or `AsyncMessage` (`Sendable`, delivered asynchronously)
 - `NotificationCenter.default.notifications(named:)` is an `AsyncSequence` for existing string-named notifications
 
 **Related to check:** Delegate pattern, event-driven architecture, async sequences, retain cycles, @Observable
@@ -4595,7 +4595,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Scene life cycle:** `sceneWillEnterForeground`, `sceneDidBecomeActive`, `sceneWillResignActive`, `sceneDidEnterBackground`; SwiftUI `@Environment(\.scenePhase)`
 - **App delegate still exists** for process-level work: launch setup, push token registration, background URL session events, scene configuration
 - **State restoration:** `@SceneStorage` in SwiftUI, `NSUserActivity` / `stateRestorationActivity(for:)` in UIKit
-- **Background time is short:** save on `.background`; use `BGTaskScheduler` or `BGContinuedProcessingTask` (iOS 26+) for longer work
+- **Background time is short:** save on `.background`; use `BGTaskScheduler` or `BGContinuedProcessingTask` for longer work
 
 **Related to check:** UIApplication lifecycle, UIScene and multiwindow, state restoration, background tasks, deep linking (scene URL callbacks)
 
@@ -4633,7 +4633,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** I build logging on Apple's unified logging system through `os.Logger`: one subsystem (the bundle ID) and a category per feature or layer (`network`, `sync`, `auth`), declared once as static constants so every module logs consistently. `Logger` is `Sendable`, cheap when a level is disabled, and formats lazily, and its string interpolation takes **privacy** annotations: dynamic values are redacted in logs by default, so you mark only what is safe as `.public` and hash identifiers with `.private(mask: .hash)`.
+**Short answer:** I build logging on Apple's unified logging system through `os.Logger`: one subsystem (the bundle ID) and a category per feature or layer (`network`, `sync`, `auth`), declared once as static constants so every module logs consistently. `Logger` is `Sendable`, cheap when a level is disabled, and formats lazily, and its string interpolation takes **privacy** annotations: dynamic strings and objects are redacted in logs by default (numbers and Booleans aren't), so you mark only what is safe as `.public` and hash identifiers with `.private(mask: .hash)`.
 
 **Key points:**
 
@@ -4686,7 +4686,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Tokens:** semantic color, type scale mapped to `Font.TextStyle`, spacing scale, corner radii; generated from the design tool where possible
 - **Dynamic Type:** `.font(.body)` or `Font.custom(_:size:relativeTo:)`, `@ScaledMetric` for sizes that should scale, layouts that reflow at accessibility sizes
 - **Components:** styles and modifiers over wrapper views, so they compose with standard controls
-- **Liquid Glass (iOS 26+):** prefer system components; `.buttonStyle(.glass)` / `.glassProminent`, `GlassEffectContainer` for grouped floating controls; remove custom bar backgrounds that fight the material
+- **Liquid Glass:** prefer system components; `.buttonStyle(.glass)` / `.glassProminent`, `GlassEffectContainer` for grouped floating controls; remove custom bar backgrounds that fight the material
 - **Distribution:** an SPM package with resources (colors, fonts), previews and snapshot tests
 
 **Related to check:** Liquid Glass, Dynamic Type, accessibility, theming via environment, code organization, snapshot testing
@@ -4702,13 +4702,13 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** There are three directions: supporting older OS versions with newer SDK APIs, evolving your own module APIs without breaking callers, and evolving data formats and server contracts that old app versions still use. For the OS, I build with the latest SDK, keep a deployment target (iOS 18 in this book), and gate newer APIs with `if #available` and `@available`.
+**Short answer:** There are three directions: supporting older OS versions with newer SDK APIs, evolving your own module APIs without breaking callers, and evolving data formats and server contracts that old app versions still use. For the OS, I build with the latest SDK, keep a deployment target (iOS 26 in this book), and gate newer APIs with `if #available` and `@available`.
 
 **Key points:**
 
-- **Version numbering jumped:** after iOS 18 came **iOS 26** (Apple aligned all OS versions with the year in 2025), so a check for the newest features is `#available(iOS 26, *)`, and iOS 19–25 never existed
-- `if #available(iOS 26, *) { … } else { … }` at runtime; `@available(iOS 26, *)` on declarations; `if #unavailable(iOS 26)` for the inverse
-- Swift 6.4 also accepts `@available(anyAppleOS 26, *)` for code that shares the unified version number across Apple platforms
+- **Version numbering jumped:** after iOS 18 came **iOS 26** (Apple aligned all OS versions with the year in 2025), so iOS 19–25 never existed and a check for the newest features is `#available(iOS 27, *)`
+- `if #available(iOS 27, *) { … } else { … }` at runtime; `@available(iOS 27, *)` on declarations; `if #unavailable(iOS 27)` for the inverse
+- Swift 6.4 also accepts `@available(anyAppleOS 27, *)` for code that shares the unified version number across Apple platforms
 - Deprecation attributes with `renamed:` / `message:` give callers a migration path and Fix-its
 - Test on the minimum supported OS, not just the latest simulator
 
@@ -4777,7 +4777,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Publish/subscribe:** publishers don't know subscribers; many-to-many
 - **Typed events:** `Sendable` structs or enums, not string names plus `userInfo: [AnyHashable: Any]`
-- **iOS 26+ typed notifications:** conform a struct to `NotificationCenter.MainActorMessage` (delivered on the main actor) or `AsyncMessage` (delivered asynchronously, must be `Sendable`); observe with `addObserver(of:for:)`; `AsyncMessage`s can also be iterated with `messages(of:for:)`
+- **Typed notifications:** conform a struct to `NotificationCenter.MainActorMessage` (delivered on the main actor) or `AsyncMessage` (delivered asynchronously, must be `Sendable`); observe with `addObserver(of:for:)`; `AsyncMessage`s can also be iterated with `messages(of:for:)`
 - **Own bus:** an `actor` holding `AsyncStream` continuations per subscriber; `onTermination` removes them
 - **Legacy:** selector/block `NotificationCenter` observers and Combine `PassthroughSubject` are still common in existing code
 
@@ -5234,7 +5234,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Schemas:** `@AppEntity(schema: .notes.note)`, `@AppIntent(schema: .notes.createNote)`, `@AppEnum(schema:)`. These macros exist from iOS 18 and replace the deprecated `@AssistantEntity` / `@AssistantIntent` spellings; each domain is tagged with the OS that introduced it. The schema defines the shape (properties, parameters, return value) that Apple's models were trained on, so Siri can use your action without phrases you wrote
 - **Domains:** iOS 18 introduced books, browser, camera, files, journal, mail, photos, presentation, reader, spreadsheet, system, whiteboard and word processor; iOS 27 adds messages, notes, reminders, calendar, clock, maps, phone and audio
 - **Semantic index:** conform entities to `IndexedEntity` and call `CSSearchableIndex.default().indexAppEntities(_:)`; delete with `deleteAppEntities(identifiedBy:ofType:)` when content goes away
-- **View annotations** is Apple's feature name, not a type or modifier. The APIs are SwiftUI `.appEntityIdentifier(EntityIdentifier(for: entity))` and `.appEntityUIElements { context in … }` for visible and selected elements (iOS 18.4+); UIKit `UIView.appEntityIdentifier`, `appEntityUIElementProvider` and `UITableView.appIntentsDataSource` (iOS 18.4+); and `NSUserActivity.appEntityIdentifier` (iOS 18.2+)
+- **View annotations** is Apple's feature name, not a type or modifier. The APIs are SwiftUI `.appEntityIdentifier(EntityIdentifier(for: entity))` and `.appEntityUIElements { context in … }` for visible and selected elements; UIKit `UIView.appEntityIdentifier`, `appEntityUIElementProvider` and `UITableView.appIntentsDataSource`; and `NSUserActivity.appEntityIdentifier`
 
 **Related to check:** App Intents architecture, Siri AI integration (system design), SiriKit to App Intents migration, testing App Intents, Foundation Models integration, deep linking, Spotlight / Core Spotlight
 
@@ -5271,7 +5271,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Foundation Models (iOS 26+) gives the app direct access to the on-device language model behind Apple Intelligence: no API key, no per-request cost, and the user's data never leaves the device. I wrap it in a feature service behind my own protocol.
+**Short answer:** Foundation Models gives the app direct access to the on-device language model behind Apple Intelligence: no API key, no per-request cost, and the user's data never leaves the device. I wrap it in a feature service behind my own protocol.
 
 **Key points:**
 
@@ -5327,7 +5327,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Client: `struct APIClient: Sendable` with `let` properties only; inject `any HTTPTransport` (a `Sendable` protocol) for tests
 - DTOs: `struct … : Decodable, Sendable`; generic methods constrain `T: Decodable & Sendable` so results can cross back to the caller's actor
 - Actors for state: `TokenProvider` holding `Task<Token, any Error>?`, a loader holding `[Key: Task<Value, any Error>]` to share in-flight requests
-- `Mutex` (iOS 18, `Synchronization`) for state touched from **synchronous** callbacks, like `URLSessionDelegate` methods, where you can't `await` an actor: a delegate can be a `final class …: NSObject, URLSessionTaskDelegate, Sendable` whose only stored property is a `let` `Mutex`
+- `Mutex` (`Synchronization`) for state touched from **synchronous** callbacks, like `URLSessionDelegate` methods, where you can't `await` an actor: a delegate can be a `final class …: NSObject, URLSessionTaskDelegate, Sendable` whose only stored property is a `let` `Mutex`
 - `@concurrent` on CPU-heavy entry points (decoding large payloads) so a `@MainActor` caller doesn't decode on main
 - Cancellation is free: SwiftUI `.task` cancels the `Task`, URLSession cancels the request, and `CancellationError` / `URLError(.cancelled)` should not show an error UI
 
@@ -5445,8 +5445,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Sign-in:** server returns a challenge → `createCredentialAssertionRequest(challenge:)` → send `credentialID`, `rawClientDataJSON`, `rawAuthenticatorData`, `signature` and `userID`; the server verifies the signature, origin, RP ID and challenge
 - **Relying party ID** = your domain (`example.com`). The app needs the Associated Domains entitlement `webcredentials:example.com`, and the site serves `apple-app-site-association` listing your app ID
 - **UI modes:** a modal sheet (`performRequests()`), AutoFill-assisted (`performAutoFillAssistedRequests()` with a `.username` text field), and `.preferImmediatelyAvailableCredentials` to fall back silently when the device has no passkey
-- **Upgrades:** `requestStyle: .conditional` (iOS 18) creates a passkey automatically right after a password sign-in, without a sheet
-- **iOS 26+:** `ASAuthorizationAccountCreationProvider` for one-sheet account creation with a passkey; credential-manager signals (`reportUnknownPublicKeyCredential`, `reportAllAcceptedPublicKeyCredentials`, on `ASCredentialDataManager` from iOS 26.2) keep the user's password manager in sync with your server
+- **Upgrades:** `requestStyle: .conditional` creates a passkey automatically right after a password sign-in, without a sheet
+- **Account creation and sync:** `ASAuthorizationAccountCreationProvider` for one-sheet account creation with a passkey; credential-manager signals (`reportUnknownPublicKeyCredential`, `reportAllAcceptedPublicKeyCredentials`, on `ASCredentialDataManager` from iOS 26.2) keep the user's password manager in sync with your server
 
 **Related to check:** Authentication (tokens, Keychain, single-flight refresh), OAuth 2.0 flow (PKCE), Sign in with Apple, App Attest, universal links / associated domains, secrets management
 
@@ -5491,7 +5491,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Server controls freshness: `max-age`, `no-cache` (store, but revalidate every time), `no-store` (never store), `private`, `ETag`, `Last-Modified`, `Vary`
 - Per-request `cachePolicy`: `.useProtocolCachePolicy` (default), `.reloadIgnoringLocalCacheData`, `.returnCacheDataElseLoad`, `.returnCacheDataDontLoad` (offline only)
 - Session-wide: `URLSessionConfiguration.urlCache` and `.requestCachePolicy`; `.ephemeral` sessions cache in memory only
-- Not everything is cached: only successful responses whose headers and policies allow it, and only if they're small relative to the cache (no more than about 5% of the disk capacity)
+- Not everything is cached: only successful responses whose headers and policies allow it, and only if they're small relative to the cache (no more than about 5% of the disk cache's capacity)
 - Invalidate after mutations with `removeCachedResponse(for:)` or `removeAllCachedResponses()`
 
 **Related to check:** Response caching (app-level), URLCache, offline-first, AsyncImage, headers, content negotiation (`Vary`)
@@ -5515,7 +5515,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Move the file in `didFinishDownloadingTo` **before returning**; the temporary file is deleted afterwards
 - One session per identifier, created once (app launch or relaunch); `sessionSendsLaunchEvents = true`
 - `isDiscretionary = true` lets the system wait for Wi-Fi and power; downloads started while the app is in the background are discretionary anyway
-- Background Assets: `BAURLDownload` scheduled from a downloader extension (iOS 16.4+ API), or **managed asset packs** hosted by Apple via `AssetPackManager` (iOS 26+)
+- Background Assets: `BAURLDownload` scheduled from a downloader extension or **managed asset packs** hosted by Apple via `AssetPackManager`
 
 **Related to check:** Download resume, URLSession, background tasks (`BGTaskScheduler`, `BGContinuedProcessingTask`), app lifecycle (UIScene), file storage
 
@@ -5649,7 +5649,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** In Combine, `URLSession.shared.dataTaskPublisher(for:)` emits one `(data, response)` value or a `URLError`; I validate the status in `tryMap`, `decode` the body, `receive(on:)` the main queue, and `sink` into the model, keeping the `AnyCancellable`. That's still worth knowing because many codebases built in the iOS 13–16 era use it, but for new code I write the same thing with async/await: it's shorter, errors are typed by `throws`, cancellation comes from the task (or SwiftUI's `.task`), and Swift 6 checks isolation at compile time.
+**Short answer:** In Combine, `URLSession.shared.dataTaskPublisher(for:)` emits one `(data, response)` value or a `URLError`; I validate the status in `tryMap`, `decode` the body, `receive(on:)` the main queue, and `sink` into the model, keeping the `AnyCancellable`. Before async/await this was the standard approach, and many codebases built in the iOS 13–16 era still use it; in Xcode 27 Combine is legacy, not deprecated (it builds cleanly, as does `ObservableObject`), but for new code I write the same thing with async/await: it's shorter, errors are typed by `throws`, cancellation comes from the task (or SwiftUI's `.task`), and Swift 6 checks isolation at compile time.
 
 **Key points:**
 
@@ -5961,11 +5961,11 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `receive()` must be called again for every message; stop the loop on error
 - `sendPing(pongReceiveHandler:)` detects dead connections that TCP hasn't noticed
 - `cancel(with: .goingAway, reason:)` closes cleanly; `closeCode` / `closeReason` tell you why the server closed
-- `maximumMessageSize` (default 1 MB) makes larger messages fail the receive
+- `maximumMessageSize` makes larger messages fail the receive; Apple doesn't document the default, but it reads 1 MB (1,048,576 bytes) at runtime
 - `URLSessionWebSocketDelegate` reports `didOpenWithProtocol` / `didCloseWith`
 - Subprotocols: `webSocketTask(with: url, protocols: ["graphql-transport-ws"])`
 
-**Related to check:** WebSocket reconnection, `AsyncStream`, actors, URLSession, chunked transfer / server-sent events, Network framework (`NetworkConnection`, iOS 26+)
+**Related to check:** WebSocket reconnection, `AsyncStream`, actors, URLSession, chunked transfer / server-sent events, Network framework (`NetworkConnection`)
 
 </details>
 
@@ -6006,7 +6006,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - Strategies: `.deferredToDate` (default), `.iso8601`, `.secondsSince1970`, `.millisecondsSince1970`, `.formatted(DateFormatter)`, `.custom { decoder in … }`
-- `.iso8601` handles `Z` and offsets; don't rely on it for fractional seconds across the OS versions you support
+- `.iso8601` handles `Z` and offsets; Foundation's ISO 8601 parser only tolerates fractional seconds from the Swift 6.2 release (iOS 26) on; that covers an iOS 26 minimum, but a custom strategy that names both forms keeps the behavior explicit and testable
 - `Date.ISO8601FormatStyle` (a `Sendable` value) is the modern parser; `DateFormatter` needs `en_US_POSIX` locale and an explicit time zone
 - The `.custom` closure is `@Sendable` in Swift 6, so capture only `Sendable` values
 - Date-only fields (birthdays, "2026-10-17") aren't instants; consider decoding them as `String` or `DateComponents` rather than `Date`
@@ -6104,7 +6104,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - HTTP/3: QUIC (UDP), per-stream loss recovery, faster handshakes, connection migration; discovered via `Alt-Svc` headers or HTTPS DNS records
 - `URLSession` uses the best protocol the server offers with no code change; `URLRequest.assumesHTTP3Capable` lets a request try HTTP/3 on the first connection
 - `URLSessionTaskTransactionMetrics.networkProtocolName` reports `"http/1.1"`, `"h2"` or `"h3"`
-- Network framework supports QUIC directly for custom protocols (`NWProtocolQUIC`, and the iOS 26 `NetworkConnection` API)
+- Network framework supports QUIC directly for custom protocols (`NWProtocolQUIC`, and the `NetworkConnection` API)
 
 **Related to check:** Connection pooling, gRPC on iOS, chunked transfer, Network framework (`NetworkConnection`, QUIC), timeout
 
@@ -6243,7 +6243,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Protobuf: binary, schema-evolved by field numbers (add fields, never reuse numbers)
 - Four call types: unary, server streaming, client streaming, bidirectional streaming
-- grpc-swift 2: `GRPCCore` + a transport package (`grpc-swift-nio-transport`) + `grpc-swift-protobuf` for codegen; requires an iOS 18 deployment target and Swift 6
+- grpc-swift 2: `GRPCCore` + a transport package (`grpc-swift-nio-transport`) + `grpc-swift-protobuf` for codegen; its APIs need iOS 18 or later (below the iOS 26 minimum, so no availability checks), and current releases need a Swift 6.1 toolchain
 - gRPC relies on HTTP/2 trailers that `URLSession` doesn't expose, so the client uses its own (SwiftNIO-based) transport, including a Network.framework-backed variant on Apple platforms
 - Alternatives that work over plain HTTPS/`URLSession`: gRPC-Web or the Connect protocol (Connect-Swift)
 
@@ -6502,7 +6502,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Request: `Accept` (format), `Accept-Language` (locale), `Accept-Encoding` (compression); `Content-Type` describes **the body you send**
 - Response: `Content-Type`, `Content-Language`, `Content-Encoding`, `Vary`
-- `URLSession` adds `Accept-Encoding` (gzip, deflate, br) and decompresses transparently; it also sends an `Accept-Language` based on the user's preferred languages
+- `URLSession` adds `Accept-Encoding` (gzip, deflate, br) and decompresses transparently; in practice it also sends an `Accept-Language` based on the user's preferred languages (observed behavior; Apple doesn't document it, so set the header yourself if the server depends on it)
 - Status codes: **406** (can't produce what you accept), **415 Unsupported Media Type** (server can't read your `Content-Type`)
 - Media-type versioning: `Accept: application/vnd.example.v2+json` as an alternative to `/v2/` in the URL
 
@@ -6673,7 +6673,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - The handle is `Task<Success, Failure>`: `await task.value` (or `try await` for throwing tasks), `task.cancel()`
 - Dropping the handle doesn't cancel the task; it keeps running until it finishes
 - `Task(name: "…") { }` gives the task a name that shows up in debugging and Instruments
-- `Task.immediate { }` (iOS 26+) starts running synchronously on the current actor until its first suspension, instead of being enqueued
+- `Task.immediate { }` starts running synchronously on the current actor until its first suspension, instead of being enqueued
 - In SwiftUI, prefer the `.task` modifier, which is cancelled automatically when the view disappears
 
 **Related to check:** Unstructured vs structured concurrency, task groups, `async let`, cancellation, task-local values, `.task` modifier
@@ -6697,7 +6697,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `async` returns immediately; `sync` blocks the caller until the work finishes (never `sync` onto the current queue)
 - Tools: `DispatchGroup`, barriers, `DispatchWorkItem`, `DispatchSemaphore`, `DispatchSource`, `asyncAfter`
 - **Swift 6:** closures passed to `async` are `@Sendable`, so captured values must be `Sendable`; hop to main for UI work
-- **Modern Swift:** `DispatchQueue.main.async` → `@MainActor`; `DispatchQueue.global().async` → `@concurrent func`; group → `async let` / task group; `asyncAfter` → `Task.sleep(for:)`
+- GCD is legacy, not deprecated: it builds cleanly in Xcode 27, but completion-handler code that sends non-`Sendable` closures is an error in Swift 6 mode. **Modern Swift:** `DispatchQueue.main.async` → `@MainActor`; `DispatchQueue.global().async` → `@concurrent func`; group → `async let` / task group; `asyncAfter` → `Task.sleep(for:)`
 
 **Related to check:** Serial vs concurrent queues, QoS, DispatchGroup, dispatch barriers, DispatchWorkItem, OperationQueue, thread vs queue, @MainActor, @concurrent, deadlock
 
@@ -6720,7 +6720,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `maxConcurrentOperationCount`: bound parallelism (1 makes it serial)
 - `cancel()` / `cancelAllOperations()`: sets `isCancelled`; operations must check it
 - `qualityOfService` and `queuePriority`; `OperationQueue.main` for main-thread work
-- **Modern Swift:** dependencies → sequential `await`s; concurrency limit → task group that adds a child as one finishes; cancellation → `Task.cancel()`
+- `OperationQueue` is legacy, not deprecated (it builds cleanly in Xcode 27). **Modern Swift:** dependencies → sequential `await`s; concurrency limit → task group that adds a child as one finishes; cancellation → `Task.cancel()`
 
 **Related to check:** GCD, task groups, cancellation, DispatchWorkItem, QoS, structured concurrency
 
@@ -6745,7 +6745,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Each `await` into an actor is a potential **hop** between executors; group related work in one actor method rather than many small calls
 - `nonisolated` members and immutable `let`s skip isolation; an `isolated` parameter runs a whole function on an actor (see `actor-isolation-rules.md`)
 - Custom executors: an actor can run on a specific `SerialExecutor` (e.g. a `DispatchSerialQueue`) by overriding `unownedExecutor`, mainly for interop with code that already owns a queue
-- `isolated deinit` (Swift 6.2) lets a deinit call isolated methods; it needs **iOS 18.4+** on custom actors (it back-deploys for `@MainActor` classes)
+- `isolated deinit` (Swift 6.2) lets a deinit call isolated methods, on actors and on `@MainActor` classes
 
 **Related to check:** Actor isolation rules, actor reentrancy, MainActor, global actors, `Sendable`, `Mutex`, `nonisolated`
 
@@ -6816,7 +6816,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Immutable `Sendable` values:** structs and enums of `Sendable` members, `final class` with only `let` `Sendable` properties
 - **`@MainActor`:** UI types and view models; the main actor serializes access on the main thread
 - **Actors:** shared mutable state with async access; callers `await`
-- **`Mutex` / `Atomic`** (Synchronization, iOS 18+): synchronous access from any context; a class holding one can be `Sendable`
+- **`Mutex` / `Atomic`** (Synchronization framework): synchronous access from any context; a class holding one can be `Sendable`
 - **Legacy:** serial `DispatchQueue`, `NSLock`, `OSAllocatedUnfairLock`; the owning class becomes `@unchecked Sendable`
 
 **Related to check:** Sendable, actors, @MainActor, NSLock and Mutex, race conditions vs data races, deadlock, Thread Sanitizer, serial vs concurrent queues
@@ -6976,14 +6976,14 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Call task.cancel() to request cancellation. Cancellation is cooperative—it only sets a flag; your code must check Task.isCancelled or call try Task.checkCancellation() and stop.
+**Short answer:** Call `task.cancel()` to request cancellation. Cancellation is cooperative: it only sets a flag, and your code must check `Task.isCancelled` or call `try Task.checkCancellation()` and stop.
 
 **Key points:**
 
-- task.cancel() requests cancellation
-- Check Task.isCancelled in loops
-- CancellationError thrown only by code that checks (Task.checkCancellation, Task.sleep, URLSession)
-- Child tasks are cancelled when parent is
+- `task.cancel()` requests cancellation
+- Check `Task.isCancelled` in loops
+- `CancellationError` is thrown only by code that checks (`Task.checkCancellation`, `Task.sleep`); a cancelled `URLSession` request throws `URLError(.cancelled)` instead
+- Child tasks are cancelled when their parent is
 - Async cleanup: `defer { await connection.close() }` is allowed since Swift 6.4 (SE-0493)
 - Cleanup that must finish even though the task is cancelled: wrap it in `withTaskCancellationShield { }` (iOS 27+, SE-0504); inside it, `Task.isCancelled` reads false and cancellation-checking calls don't throw
 
@@ -7031,7 +7031,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Only works on a **custom concurrent** queue; on a global queue it's an ordinary block, on a serial queue it adds nothing
 - Barrier waits for earlier blocks and holds back later ones
 - Reader–writer: concurrent `sync` reads, exclusive barrier writes
-- **Modern Swift:** actor (async callers) or `Mutex` (sync callers) instead
+- Barrier queues are legacy: before iOS 27 this was a standard pattern, and it still builds cleanly in Xcode 27. **Modern Swift:** an actor (async callers) or a `Mutex` (sync callers) instead
 
 **Related to check:** Serial vs concurrent queues, GCD, NSLock and Mutex, actors, thread safety
 
@@ -7073,13 +7073,13 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- `publisher.values`: `for await v in model.$query.values { }`; breaking out of the loop or cancelling the task cancels the subscription
+- `publisher.values`: `for await v in model.$query.values { }`; breaking out of the loop or cancelling the task cancels the subscription (Apple's docs don't spell this out, but it's what the iterator does in practice)
 - First value only: `for try await v in publisher.values { return v }`
 - `.values` requests **one value at a time**; a `PassthroughSubject` or `@Published` that emits while the loop body is busy has its values **dropped**. Add `.buffer(size:prefetch:whenFull:)` before `.values` when every value matters
 - Combine operators (`debounce`, `removeDuplicates`, `combineLatest`) can be applied before `.values`; the pure-async equivalents live in the Swift Async Algorithms package
 - There's no built-in AsyncSequence → Publisher; feed a subject from a `Task` if legacy code needs a publisher
-- Combine is legacy for observation: `ObservableObject` + `@Published` is "older code / iOS 16 and earlier"; `@Observable` doesn't produce publishers
-- `Observations { model.query }` (Swift 6.2, iOS 26+) is an `AsyncSequence` of transactional changes to `@Observable` properties
+- Combine is legacy for observation: `ObservableObject` + `@Published` still builds cleanly in Xcode 27 (legacy, not deprecated), but new models use `@Observable`, which doesn't produce publishers
+- `Observations { model.query }` (Swift 6.2) is an `AsyncSequence` of transactional changes to `@Observable` properties
 
 **Related to check:** AsyncSequence, AsyncStream, Observation (`@Observable`, `Observations`), Combine, cancellation, `.task` modifier
 
@@ -7103,7 +7103,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Built-in operators are lazy: `seq.filter { … }.map { … }.prefix(10)` does nothing until iterated
 - Create one with `AsyncStream.makeStream(of:)` (push) or `AsyncStream(unfolding:)` (pull), or conform to `AsyncSequence` + `AsyncIteratorProtocol`
 - Cancellation: the consuming task's cancellation ends iteration of well-behaved sequences; your own iterators should check it
-- `Observations { model.value }` (iOS 26+) turns `@Observable` state into an async sequence
+- `Observations { model.value }` turns `@Observable` state into an async sequence
 
 **Related to check:** AsyncStream, AsyncIteratorProtocol, `Observations`, Combine publishers, cancellation, `.task` modifier
 
@@ -7315,7 +7315,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `Task.sleep(until: .now + .seconds(2), clock: .continuous)` for a deadline; `tolerance:` lets the system coalesce timers
 - `ContinuousClock` keeps counting while the device sleeps; `SuspendingClock` doesn't
 - Cancellation: store the `Task` handle and call `cancel()`; the sleep throws and the rest of the task is skipped
-- Legacy: `DispatchQueue.main.asyncAfter(deadline: .now() + 1) { … }`; cancel via `DispatchWorkItem.cancel()`
+- Legacy (builds cleanly in Xcode 27, not deprecated): `DispatchQueue.main.asyncAfter(deadline: .now() + 1) { … }`; cancel via `DispatchWorkItem.cancel()`
 - In SwiftUI, `.task(id:)` restarts and cancels delayed work automatically (debounced search)
 
 **Related to check:** Task, cancellation, `Clock` / `Duration`, `DispatchWorkItem`, `Timer`, `.task(id:)` modifier
@@ -7604,7 +7604,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - `AsyncSequence` → `makeAsyncIterator()`; `AsyncIteratorProtocol` → `mutating func next() async throws -> Element?`
 - `for await` / `for try await` desugars to `var it = seq.makeAsyncIterator(); while let x = await it.next() { … }`
-- `associatedtype Failure` (Swift 6.0, iOS 18): inferred from your `next()`: non-throwing means `Never`, `throws(ParseError)` means `ParseError`. That's what makes `some AsyncSequence<Int, Never>` and typed `catch` work
+- `associatedtype Failure` (Swift 6.0): inferred from your `next()`: non-throwing means `Never`, `throws(ParseError)` means `ParseError`. That's what makes `some AsyncSequence<Int, Never>` and typed `catch` work
 - Swift 6.0 added `next(isolation:)` with a default implementation; `for await` calls it so iteration stays on the caller's actor and non-Sendable iterators don't have to cross isolation. When you wrap another iterator, forward it: `await base.next(isolation: #isolation)` (plain `base.next()` is a "sending 'self.base'" error under Swift 6.2's `NonisolatedNonsendingByDefault`)
 - Iterators are usually single-pass and owned by one task; the iterator itself is typically not `Sendable`
 - For push-based sources (delegates, callbacks), don't hand-write an iterator: use `AsyncStream.makeStream(of:)`
@@ -7704,7 +7704,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `Task.currentPriority` reflects escalation; `Task.basePriority` is what it was created with
 - **Escalation:** awaiting a task's `.value`, or enqueuing higher-priority work on an actor that's busy, raises the waited-on work's priority (it doesn't come back down until that work finishes)
 - Escalation is how a `.background` prefetch that the user is now waiting for gets finished quickly
-- iOS 26+: `task.escalatePriority(to:)` escalates manually, and `withTaskPriorityEscalationHandler` lets you forward escalation to work Swift can't see (a legacy job queue, a C library)
+- `task.escalatePriority(to:)` escalates manually, and `withTaskPriorityEscalationHandler` lets you forward escalation to work Swift can't see (a legacy job queue, a C library)
 - Mapping to QoS: `.high` ≈ `userInitiated`, `.medium` ≈ `default`, `.low` ≈ `utility`, `.background` ≈ `background` (see `quality-of-service.md`)
 
 **Related to check:** Quality of Service, Task, task groups, actors, task-local values, `withTaskCancellationHandler`
@@ -7750,7 +7750,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `Task { }` inherits actor isolation, priority and task-locals; from a `@MainActor` method its body runs on main, so it can update UI state directly
 - Keep the handle (`Task<Void, Never>?`) if the work can be superseded or cancelled; dropping it doesn't cancel anything
 - SwiftUI: `.task { }` (and `.task(id:)`) runs async work tied to the view's lifetime; `.refreshable` and many other modifiers already take async closures
-- `Task.immediate { }` (iOS 26+) runs synchronously until the first suspension, for state that must change before the sync caller returns
+- `Task.immediate { }` runs synchronously until the first suspension, for state that must change before the sync caller returns
 - For legacy callers, expose a completion-handler wrapper that starts a `Task`; `@objc` async methods are already exposed to Objective-C with a completion-handler signature
 - No synchronous waiting: `DispatchSemaphore.wait()` or `DispatchGroup.wait()` on a `Task` blocks a thread the task may need
 - The opposite directions: callback API → async is `continuations.md`; sync code called from async is `async-sync-bridge.md`
@@ -7800,7 +7800,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `cancel()`: if not started, it won't run; if running, it only sets `isCancelled`
 - `notify(queue:execute:)`: run something after it finishes; `wait()` blocks until it does
 - `perform()` runs it synchronously on the current thread
-- **Modern Swift:** `DispatchWorkItem.cancel()` → `Task.cancel()`; `asyncAfter` → `Task.sleep(for:)`
+- `DispatchWorkItem` and `asyncAfter` are legacy (they build cleanly in Xcode 27). **Modern Swift:** `DispatchWorkItem.cancel()` → `Task.cancel()`; `asyncAfter` → `Task.sleep(for:)`
 
 **Related to check:** GCD, asyncAfter, Task cancellation, cooperative cancellation, OperationQueue, debouncing
 
@@ -7823,7 +7823,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - `notify(queue:)`: non-blocking completion callback
 - `wait()` / `wait(timeout:)`: blocks the thread; never on the main thread, never in async code
 - Results have to be collected by hand into thread-safe storage
-- **Modern Swift:** `async let` for a few known calls, `withTaskGroup` / `withThrowingTaskGroup` for N calls
+- `DispatchGroup` is legacy, not deprecated: before iOS 27 it was the standard fan-out tool and it still builds cleanly in Xcode 27 (but `wait()` is a compile error inside `async` code). **Modern Swift:** `async let` for a few known calls, `withTaskGroup` / `withThrowingTaskGroup` for N calls
 
 **Related to check:** async let, task groups, GCD, semaphores, deadlock, structured concurrency, cancellation
 
@@ -7838,14 +7838,14 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** For new code the lock is `Mutex` from the Synchronization framework (iOS 18+), with `Atomic` for simple counters and flags. I reach for a lock instead of an actor when the access must be **synchronous**: a nonisolated protocol requirement, a delegate callback, a hot path where an `await` hop costs too much, or a tiny critical section like a cache lookup.
+**Short answer:** For new code the lock is `Mutex` from the Synchronization framework, with `Atomic` for simple counters and flags. I reach for a lock instead of an actor when the access must be **synchronous**: a nonisolated protocol requirement, a delegate callback, a hot path where an `await` hop costs too much, or a tiny critical section like a cache lookup.
 
 **Key points:**
 
 - **`Mutex<Value>`** (`import Synchronization`): owns the state it protects; access only through `withLock { }`. It's `Sendable` and noncopyable, so store it as a `let` in a `final class: Sendable`
 - **`Atomic<Int>`** / `Atomic<Bool>`: lock-free counters and flags (`add(_:ordering:)`, `load`, `store`, `compareExchange`)
 - **Actor vs Mutex:** actor = async, serialized, callers `await`, can suspend inside; Mutex = sync, no `await` inside the closure, keep it short
-- **Older options:** `OSAllocatedUnfairLock` (iOS 16+, `Sendable`, can own state), `NSLock` / `NSRecursiveLock` (the compiler can't verify them, so the owning class needs `@unchecked Sendable`), `os_unfair_lock` (unsafe to use directly from Swift)
+- **Older options:** `OSAllocatedUnfairLock` (`Sendable`, can own state), `NSLock` / `NSRecursiveLock` (the compiler can't verify them, so the owning class needs `@unchecked Sendable`), `os_unfair_lock` (unsafe to use directly from Swift)
 
 **Related to check:** Actors, thread safety, Sendable, race conditions, deadlock, dispatch barriers (reader–writer), Thread Sanitizer
 
@@ -7939,7 +7939,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - **Template:** *SwiftUI* = the SwiftUI instrument plus Time Profiler, Hangs and Hitches tracks (`xcrun xctrace list templates` shows it). For devices on older OS versions, Instruments still has the *View Body (Legacy)* and *View Properties (Legacy)* instruments
-- **Lanes:** update groups, long view body updates, long platform-view (representable) updates and other long updates, flagged by how likely they are to cause a hitch
+- **Lanes:** update groups, long view body updates, long platform-view (representable) updates and other long updates, flagged orange or red by how likely they are to cause a hitch or hang
 - **Too slow:** select a long update, check the Time Profiler samples under it: formatters, sorting, filtering, image decoding or string building in `body`
 - **Too often:** the update count per view type and the cause-and-effect graph; then fix dependencies
 - **Quick check in code:** `let _ = Self._printChanges()` in `body` (debug only) prints what changed
@@ -8004,7 +8004,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Smooth scrolling means every frame is ready on time: about 8.3 ms per frame at 120 Hz on ProMotion devices, and late frames show up as **hitches**, measured as milliseconds of hitch per second of scrolling (Apple treats under 5 ms/s as good and over 10 ms/s as something users notice). Most of that budget goes on the main thread in the commit phase: dequeuing and configuring cells, Auto Layout, text measurement and image decoding.
+**Short answer:** Smooth scrolling means every frame is ready on time: about 8.3 ms per frame at 120 Hz on ProMotion devices, and late frames show up as **hitches**, measured as milliseconds of hitch per second of scrolling (Apple's WWDC20 guidance treats under 5 ms/s as good and 10 ms/s or more as distracting; Xcode Organizer's Hitches metric rates up to 10 ms/s as good). Most of that budget goes on the main thread in the commit phase: dequeuing and configuring cells, Auto Layout, text measurement and image decoding.
 
 **Key points:**
 
@@ -8126,12 +8126,12 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- **Hitch:** frame late by n ms. Ratio: under 5 ms/s is good, 5–10 ms/s is noticeable, over 10 ms/s is bad. Two kinds: *commit* hitches (your main-thread work: layout, `body`, image decoding, text measurement) and *render* hitches (the render server: offscreen passes, huge layer trees, blur and mask effects)
+- **Hitch:** frame late by n ms. Ratio (Apple's WWDC20 guidance): under 5 ms/s is good, 5–10 ms/s is noticeable, over 10 ms/s is bad; Xcode Organizer's Hitches metric grades more loosely (≤ 10 ms/s good, ≤ 25 warning, ≤ 50 critical). Two kinds: *commit* hitches (your main-thread work: layout, `body`, image decoding, text measurement) and *render* hitches (the render server: offscreen passes, huge layer trees, blur and mask effects)
 - **Hang:** main run loop not handling events. Can be *busy* (CPU work on main) or *blocked* (waiting on a lock, semaphore, synchronous I/O or another thread); Time Profiler only shows the busy kind, so check thread states for the blocked kind
 - **Watchdog:** a long hang during launch, resume or scene transitions gets the app terminated (`0x8badf00d` in crash reports)
 - **Lab tools:** Hangs instrument (250 ms default threshold, configurable; the Animation Hitches template lowers it to 33 ms), Hitches instrument in the Animation Hitches template, SwiftUI instrument for long view updates, Thread Performance Checker in the scheme diagnostics, on-device hang detection in Settings › Developer
-- **Field tools:** Organizer Hangs report; MetricKit `applicationResponsivenessMetrics` (hang-time histogram), `hangDiagnostics` (stack + duration), `animationMetrics.scrollHitchTimeRatio` and `hitchTimeRatio` (iOS 26+)
-- **Tests:** `XCTOSSignpostMetric.scrollingAndDecelerationMetric`, and `XCTHitchMetric(application:)` (iOS 26+) in XCTest performance tests
+- **Field tools:** Organizer Hangs report; MetricKit `applicationResponsivenessMetrics` (hang-time histogram), `hangDiagnostics` (stack + duration), `animationMetrics.scrollHitchTimeRatio` and `hitchTimeRatio`
+- **Tests:** `XCTOSSignpostMetric.scrollingAndDecelerationMetric`, and `XCTHitchMetric(application:)` in XCTest performance tests
 
 **Related to check:** Main thread, scroll performance, animation performance, offscreen rendering, Time Profiler, SwiftUI performance instrument, MetricKit, performance testing, Instruments run comparison
 
@@ -8248,7 +8248,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Standard-library collections, `String` and `Data` are COW; your own structs are not unless you implement it
 - Custom COW: a struct wrapping a `final class` storage + `isKnownUniquelyReferenced(&storage)` before writes
 - A struct holding a plain class reference *shares* that object: that's reference semantics, not COW
-- Swift 6.2+ alternatives when you don't want COW: `InlineArray` (Swift 6.2, iOS 26+, fixed size, inline, eager copies), `~Copyable` types (no implicit copies at all), `Span` (read without copying, iOS 26+), `UniqueArray` (Swift 6.4, iOS 27+, a noncopyable growable array)
+- Swift 6.2+ alternatives when you don't want COW: `InlineArray` (Swift 6.2, fixed size, inline, eager copies), `~Copyable` types (no implicit copies at all), `Span` (read without copying), `UniqueArray` (Swift 6.4, iOS 27+, a noncopyable growable array)
 
 **Related to check:** Value vs reference types, heap vs stack, ARC, noncopyable types, InlineArray / Span, Sendable, string performance
 
@@ -8296,7 +8296,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Several runs per side** (5–10): `xctrace record --append-run --run-name …` keeps them in one trace; compare medians, not best or first runs
 - **Noise band:** if the before/after difference is smaller than the spread between runs, you haven't shown anything yet; repeat or reduce noise
 - **Guard against regressions:** XCTest `measure(metrics:options:)` with `XCTOSSignpostMetric`, `XCTClockMetric`, `XCTCPUMetric`, `XCTMemoryMetric`; baselines are stored per device, with an allowed deviation
-- **Field confirmation:** MetricKit (`MXMetricPayload` on iOS 18–26, `MetricManager().metricReports` on iOS 27+) and Organizer per app version: launch time, hang rate, hitch ratio, memory
+- **Field confirmation:** MetricKit (`MetricManager().metricReports` on iOS 27+, `MXMetricPayload` as the iOS 26 fallback) and Organizer per app version: launch time, hang rate, hitch ratio, memory
 
 **Related to check:** Instruments, Time Profiler, performance testing (XCTest metrics), MetricKit, hangs and hitches, startup optimization, os_signpost, Swift Concurrency instrument, SwiftUI performance instrument
 
@@ -8358,7 +8358,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** You don't run your own background loops; you ask the system and let it pick the moment. The BackgroundTasks framework has three task types: **`BGAppRefreshTask`** for short, frequent content refreshes (about 30 seconds), **`BGProcessingTask`** for longer deferrable maintenance that can require power and network, and **`BGContinuedProcessingTask`** (iOS 26+) for work the *user* started, like an export, that should keep going after they leave the app, with progress shown in system UI.
+**Short answer:** You don't run your own background loops; you ask the system and let it pick the moment. The BackgroundTasks framework has three task types: **`BGAppRefreshTask`** for short, frequent content refreshes (about 30 seconds), **`BGProcessingTask`** for longer deferrable maintenance that can require power and network, and **`BGContinuedProcessingTask`** for work the *user* started, like an export, that should keep going after they leave the app, with progress shown in system UI.
 
 **Key points:**
 
@@ -8367,7 +8367,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - SwiftUI: `.backgroundTask(.appRefresh("id")) { … }` on the scene; the async closure is cancelled when time runs out
 - UIKit: `BGTaskScheduler.shared.register(forTaskWithIdentifier:using:)` before launch finishes, set `expirationHandler`, always call `setTaskCompleted(success:)`
 - `BGProcessingTaskRequest`: `requiresExternalPower`, `requiresNetworkConnectivity`; good for database cleanup, ML model updates
-- `BGContinuedProcessingTask` (iOS 26+): submitted while in the foreground, must report `progress`, can be stopped by the user; wildcard identifiers (`com.example.app.export.*`)
+- `BGContinuedProcessingTask`: submitted while in the foreground, must report `progress`, can be stopped by the user; wildcard identifiers (`com.example.app.export.*`)
 
 **Related to check:** Battery optimization, Power Profiler / energy log, background URLSession downloads, Background Assets, silent push notifications, scene phase, cancellation
 
@@ -8415,7 +8415,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Classes, actors and closures' captured context: heap (the optimizer can promote non-escaping objects to the stack)
 - Value types: inline in their container; collections (`Array`, `String`, `Dictionary`) are small structs pointing to a heap buffer
 - Existentials (`any P`) store values up to 3 words inline and box larger ones on the heap; `some P`/generics avoid the box
-- Swift 6.2: **`InlineArray`** (fixed size, no heap buffer) and **`Span`** (safe, non-escaping view) need an iOS 26+ runtime; **`~Copyable`** types avoid copies and give unique ownership
+- Swift 6.2: **`InlineArray`** (fixed size, no heap buffer) and **`Span`** (safe, non-escaping view) avoid heap buffers and copies; **`~Copyable`** types avoid copies and give unique ownership
 
 **Related to check:** Value vs reference types, ARC, copy-on-write, noncopyable types, existentials (`any` vs `some`), compiler optimizations, Allocations instrument, address sanitizer
 
@@ -8509,7 +8509,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Collections: `reserveCapacity(n)` once, instead of reallocating as they grow; copy-on-write means copies are free until one is mutated
 - Strings up to 15 UTF-8 bytes are stored inline (small-string optimization)
 - Reuse: cells (`dequeueReusableCell`), `static let` formatters, preallocated buffers
-- Swift 6.2 / iOS 26+: `InlineArray<N, T>` (fixed size, stored inline), `Span` (non-owning, no ARC); `~Copyable` types avoid copies and refcounting; `UniqueArray` (Swift 6.4, iOS 27+) is a noncopyable growable array with unique ownership
+- Swift 6.2: `InlineArray<N, T>` (fixed size, stored inline), `Span` (non-owning, no ARC); `~Copyable` types avoid copies and refcounting; `UniqueArray` (Swift 6.4, iOS 27+) is a noncopyable growable array with unique ownership
 - `withUnsafeTemporaryAllocation` for scratch buffers that live only within a scope (often stack-allocated)
 
 **Related to check:** Heap vs stack, Copy-on-write, String performance, Noncopyable types, Allocations instrument, Scroll performance
@@ -8576,8 +8576,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- iOS 18 baseline: `MXMetricManager.shared.add(subscriber)` with `didReceive(_: [MXMetricPayload])` and `didReceive(_: [MXDiagnosticPayload])`; keep a strong reference to the subscriber
-- Metrics: `applicationLaunchMetrics` (time to first draw, resume time), `applicationResponsivenessMetrics` (hang time), `animationMetrics` (scroll hitch ratio; `hitchTimeRatio` iOS 26+), `memoryMetrics` (peak and suspended memory), `applicationExitMetrics` (memory-limit, watchdog and other terminations), CPU, GPU, disk, network, signposts
+- iOS 26 fallback: `MXMetricManager.shared.add(subscriber)` with `didReceive(_: [MXMetricPayload])` and `didReceive(_: [MXDiagnosticPayload])`; keep a strong reference to the subscriber
+- Metrics: `applicationLaunchMetrics` (time to first draw, resume time), `applicationResponsivenessMetrics` (hang time), `animationMetrics` (scroll hitch ratio, `hitchTimeRatio`), `memoryMetrics` (peak and suspended memory), `applicationExitMetrics` (memory-limit, watchdog and other terminations), CPU, GPU, disk, network, signposts
 - Diagnostics: `crashDiagnostics`, `hangDiagnostics`, `cpuExceptionDiagnostics`, `diskWriteExceptionDiagnostics`, `appLaunchDiagnostics`, each with an **unsymbolicated** call-stack tree
 - Custom intervals: `mxSignpost(.begin/.end, log: MXMetricManager.makeLogHandle(category:), name:)` (or `MetricManager.logHandle(category:)`, iOS 27+) so your own operations show up in metrics
 - iOS 27+: `MetricManager().metricReports` / `.diagnosticReports`, results as `MetricResult` / `DiagnosticResult` enums (including `.memoryException`), `trackLaunchTask(id:)` for extended launch tasks
@@ -8604,7 +8604,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - No callback at the moment of death; memory warnings may come first, but a fast spike can skip them
 - `os_proc_available_memory()` returns the bytes left before *this* process hits its limit: use it to scale work (decode size, batch size, cache limits)
 - Entitlements: `com.apple.developer.kernel.increased-memory-limit` asks for a higher limit on supported devices (still check headroom at runtime); `extended-virtual-addressing` is for address space, not footprint
-- Production signals: `MXAppExitMetric.foregroundExitData.cumulativeMemoryResourceLimitExitCount` (iOS 18 baseline), and on iOS 27+ `MetricResult.foregroundTermination` (`memoryLimitTerminationCount`) and `DiagnosticResult.memoryException` with a call stack
+- Production signals: `MXAppExitMetric.foregroundExitData.cumulativeMemoryResourceLimitExitCount` (the iOS 26 fallback), and on iOS 27+ `MetricResult.foregroundTermination` (`memoryLimitTerminationCount`) and `DiagnosticResult.memoryException` with a call stack
 - Background: suspended apps with large footprints are evicted first (`cumulativeMemoryPressureExitCount` in background exit data)
 
 **Related to check:** Memory warnings, Image downsampling, NSCache, VM Tracker, Leaks instrument, MetricKit
@@ -8643,7 +8643,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Swift `String` is a Unicode-correct value type stored as UTF-8, with copy-on-write and an inline small-string representation for up to 15 bytes. Its main performance trait is that `Character` is a grapheme cluster, so `count` and moving an index are O(n), and strings are indexed with `String.Index`, not `Int`; when you need speed you work on the `utf8` view (or, on iOS 26+, a `UTF8Span`).
+**Short answer:** Swift `String` is a Unicode-correct value type stored as UTF-8, with copy-on-write and an inline small-string representation for up to 15 bytes. Its main performance trait is that `Character` is a grapheme cluster, so `count` and moving an index are O(n), and strings are indexed with `String.Index`, not `Int`; when you need speed you work on the `utf8` view (or a `UTF8Span`).
 
 **Key points:**
 
@@ -8653,7 +8653,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - Byte-level work (parsing, hashing, ASCII checks) on `s.utf8` avoids grapheme breaking
 - Bridging: `NSString` APIs on a Swift `String` may convert between UTF-8 and UTF-16 storage
 - Collections: `reserveCapacity`, `Set` for membership instead of `array.contains` in a loop, `removeFirst()` on `Array` is O(n) (use an index or a deque), `lazy` to avoid intermediate arrays
-- Swift 6.2, iOS 26+: `String.utf8Span` / `UTF8Span` and `Span` give borrowed, bounds-checked access to contiguous UTF-8 without copying or retaining
+- Swift 6.2: `String.utf8Span` / `UTF8Span` and `Span` give borrowed, bounds-checked access to contiguous UTF-8 without copying or retaining
 
 **Related to check:** Copy-on-write, Object allocation, Heap vs stack, `InlineArray` / `Span`, Time Profiler
 
@@ -8887,7 +8887,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Three delivery points, all on the main thread: `UIViewController.didReceiveMemoryWarning()`, `UIApplicationDelegate.applicationDidReceiveMemoryWarning(_:)`, and the `didReceiveMemoryWarningNotification`
 - There is **no** `sceneDidReceiveMemoryWarning`; memory warnings are app-wide, not per scene
-- iOS 26+: `NotificationCenter.default.addObserver(of: UIApplication.shared, for: .didReceiveMemoryWarning) { … }` delivers a typed `MainActorMessage`, so the closure is main-actor isolated in Swift 6
+- `NotificationCenter.default.addObserver(of: UIApplication.shared, for: .didReceiveMemoryWarning) { … }` delivers a typed `MainActorMessage`, so the closure is main-actor isolated in Swift 6
 - Outside UIKit (extensions, frameworks): `DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue:)`
 - `NSCache` already evicts on its own; you only need handlers for plain dictionaries, arrays of decoded data, and resources NSCache can't see
 - Keep the handler cheap: release references, don't allocate or start new work
@@ -8913,7 +8913,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - ImageIO: `kCGImageSourceShouldCache: false` on the source, then a thumbnail with `…MaxPixelSize`, `…CreateThumbnailFromImageAlways`, `…WithTransform` (EXIF orientation), `…ShouldCacheImmediately` (decode now, off main)
 - Works from a URL or `Data` (`CGImageSourceCreateWithData`) without loading a full bitmap
 - UIKit alternative: `preparingThumbnail(of:)` / `byPreparingThumbnail(ofSize:)` on a `UIImage`
-- Scale comes from the view's trait collection (`UIScreen.main` is deprecated and wrong for external displays and resizable windows)
+- Scale comes from the view's trait collection (`UIScreen.main` is deprecated since iOS 26 and wrong for external displays and resizable windows)
 
 **Related to check:** Async image decoding, image loading and caching, lazy loading strategy, NSCache, OOM / memory warnings, adaptive layout, VM Tracker
 
@@ -8957,10 +8957,10 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Fires once per display frame on the run loop you add it to (`.main`, mode `.common` so it keeps firing during scrolling)
 - Use `targetTimestamp - previous` for delta time; never assume a fixed frame rate
-- `preferredFrameRateRange` (`CAFrameRateRange`) replaces the deprecated `preferredFramesPerSecond`
+- `preferredFrameRateRange` (`CAFrameRateRange`) replaces `preferredFramesPerSecond` (soft-deprecated: marked for deprecation, no warning yet)
 - Above 60 Hz on iPhone requires `CADisableMinimumFrameDurationOnPhone = YES` in Info.plist
 - Your callback must finish within the frame budget: 8.3 ms at 120 Hz, 16.7 ms at 60 Hz
-- **`UIUpdateLink`** (iOS 18): tied to a view or window scene, `requiresContinuousUpdates`, `UIUpdateInfo.modelTime` / `completionDeadlineTime`, low-latency options for drawing apps
+- **`UIUpdateLink`**: tied to a view or window scene, `requiresContinuousUpdates`, `UIUpdateInfo.modelTime` / `completionDeadlineTime`, low-latency options for drawing apps
 
 **Related to check:** Animation performance, CATransaction, UIView animations, retain cycles, Metal / GPU, TimelineView, battery optimization
 
@@ -9053,7 +9053,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - App thinning: the store delivers only the slices and asset variants (scale, GPU class, memory class) a device needs, so asset catalogs beat loose files
 - Code settings (Release): Dead Code Stripping, Strip Linked Product + Strip Style *All Symbols*, Strip Swift Symbols, `SWIFT_OPTIMIZATION_LEVEL = -Osize` where speed allows
 - Assets: asset catalog compression (`ASSETCATALOG_COMPILER_OPTIMIZATION = space`), HEIF/lossy where acceptable, vector PDFs/SF Symbols instead of many PNGs, remove unused assets and localizations you don't ship
-- Large content: Background Assets (managed asset packs, iOS 26+) or a download after first launch, instead of bundling
+- Large content: Background Assets (managed asset packs) or a download after first launch, instead of bundling
 - Dependencies: each SDK adds code and often resources; static linking lets the linker dead-strip unused code
 
 **Related to check:** Startup optimization, Symbolication, Lazy loading strategy, Image downsampling, Swift Package Manager
@@ -9149,7 +9149,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - IDs: client-generated UUIDs (or ULIDs/UUIDv7 if you want time ordering) so objects can be created offline and referenced before the server has seen them; never use the database's internal ID (`PersistentIdentifier`, `NSManagedObjectID`, SQLite rowid) as an external identifier
 - Timestamps: `createdAt`, `updatedAt` for change tracking; a server revision or ETag for optimistic concurrency; store dates in UTC and treat device clocks as untrustworthy for ordering across devices
 - Soft deletes: `deletedAt` hides a row, the sync layer uploads the tombstone, and a retention job purges acknowledged tombstones later
-- Uniqueness: `#Unique` on the UUID (iOS 18) makes server imports idempotent upserts instead of duplicates
+- Uniqueness: `#Unique` on the UUID makes server imports idempotent upserts instead of duplicates
 - Denormalize deliberately: cached counts and previews must be updated in the same save as the change they summarize
 
 **Related to check:** Offline Persistence, Data Synchronization, Data Deletion and Retention, Core Data Migration, SQLite on iOS, offline-first architecture, repository pattern
@@ -9165,7 +9165,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** For a new app or feature on an iOS 18+ target, SwiftData is the default: the schema lives in Swift, models are `Observable`, `@Query` drives SwiftUI, and `@ModelActor` plus Swift 6 checking keep concurrency honest. Core Data is still the right call when you need what SwiftData doesn't expose: store-level batch inserts and updates, custom merge policies, aggregate fetches, `NSFetchedResultsController` on older OS versions, or CloudKit **sharing** and **public** databases.
+**Short answer:** For a new app or feature, SwiftData is the default: the schema lives in Swift, models are `Observable`, `@Query` drives SwiftUI, and `@ModelActor` plus Swift 6 checking keep concurrency honest. Core Data is still the right call when you need what SwiftData doesn't expose: store-level batch inserts and updates, custom merge policies, aggregate fetches, `NSFetchedResultsController` in UIKit while you support iOS 26 (`ResultsObserver` is iOS 27+), or CloudKit **sharing** and **public** databases.
 
 **Related to check:** Migrating from Core Data to SwiftData, SwiftData Basics, Core Data, SwiftData and CloudKit, SwiftData Custom Data Store, Core Data in Swift 6, SQLite on iOS, Realm
 
@@ -9323,7 +9323,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** `#Unique` declares one or more uniqueness constraints on a model (each can span several properties), and `#Index` declares database indexes for the properties you filter and sort on. Both are iOS 18 macros that become real SQLite `UNIQUE INDEX` / `INDEX` definitions in the default store.
+**Short answer:** `#Unique` declares one or more uniqueness constraints on a model (each can span several properties), and `#Index` declares database indexes for the properties you filter and sort on. Both macros become real SQLite `UNIQUE INDEX` / `INDEX` definitions in the default store.
 
 **Key points:**
 
@@ -9463,7 +9463,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** From iOS 26 a `@Model` class can subclass another `@Model` class (iOS 26+). The subclass inherits the parent's persisted properties and adds its own, and the store keeps the hierarchy as one entity tree.
+**Short answer:** Since iOS 26 a `@Model` class can subclass another `@Model` class. The subclass inherits the parent's persisted properties and adds its own, and the store keeps the hierarchy as one entity tree.
 
 **Key points:**
 
@@ -9932,7 +9932,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** `CKSyncEngine` (iOS 17) owns the *mechanics* of CloudKit sync: scheduling, push subscriptions, change tokens, batching and retrying. My code owns the *data*: I tell the engine which record IDs have pending changes, build `CKRecord`s on demand in `nextRecordZoneChangeBatch`, and apply what it fetched in `handleEvent`.
+**Short answer:** `CKSyncEngine` owns the *mechanics* of CloudKit sync: scheduling, push subscriptions, change tokens, batching and retrying. My code owns the *data*: I tell the engine which record IDs have pending changes, build `CKRecord`s on demand in `nextRecordZoneChangeBatch`, and apply what it fetched in `handleEvent`.
 
 **Key points:**
 
@@ -10103,7 +10103,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - Set the class on write (`Data.WritingOptions.completeFileProtection` and friends), per item with `FileAttributeKey.protectionKey`, on a directory (new files inherit it), or app-wide with the Data Protection entitlement
 - `.completeUntilFirstUserAuthentication` is the default for app files and for Core Data stores (`NSPersistentStoreFileProtectionKey`); it protects against a powered-off, stolen device, not against a locked one
-- Shortly after lock the `.complete` class key is discarded; reads and writes then fail, and `UIApplication.ProtectedDataWillBecomeUnavailable` (typed `.protectedDataWillBecomeUnavailable` message, iOS 26+) gives you a moment to close files
+- Shortly after lock the `.complete` class key is discarded; reads and writes then fail, and `UIApplication.ProtectedDataWillBecomeUnavailable` (typed `.protectedDataWillBecomeUnavailable` message) gives you a moment to close files
 - Check `UIApplication.shared.isProtectedDataAvailable` before background work touches protected data
 - Keychain parallels: `WhenUnlocked` ≈ `.complete`, `AfterFirstUnlock` ≈ `.completeUntilFirstUserAuthentication`; `WhenPasscodeSetThisDeviceOnly` is stricter than any file class; there is no Keychain equivalent of `.completeUnlessOpen`
 
@@ -10147,7 +10147,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- Supported keys: P-256 signing and key agreement since iOS 13; **iOS 26+** adds post-quantum `SecureEnclave.MLKEM768` / `MLKEM1024` (key encapsulation) and `SecureEnclave.MLDSA65` / `MLDSA87` (signatures)
+- Supported keys: P-256 signing and key agreement since iOS 13; iOS 26 added post-quantum `SecureEnclave.MLKEM768` / `MLKEM1024` (key encapsulation) and `SecureEnclave.MLDSA65` / `MLDSA87` (signatures)
 - Store the handle (`dataRepresentation`) in the Keychain and recreate the key with `init(dataRepresentation:authenticationContext:)`; it's useless on any other device
 - Access control: `SecAccessControlCreateWithFlags` with `.privateKeyUsage` plus `.biometryCurrentSet` (invalidated when the user enrolls a new face or finger), `.biometryAny`, `.userPresence` (biometrics or passcode) or `.devicePasscode`
 - Pass an already-evaluated `LAContext` as `authenticationContext` to control the prompt text and avoid double prompts; `touchIDAuthenticationAllowableReuseDuration` allows a short reuse window
@@ -10848,7 +10848,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- `measure { }` records wall-clock time; `measure(metrics:)` picks metrics: `XCTClockMetric`, `XCTCPUMetric`, `XCTMemoryMetric`, `XCTStorageMetric`, `XCTApplicationLaunchMetric`, `XCTOSSignpostMetric`, `XCTHitchMetric(application:)` (iOS 26+)
+- `measure { }` records wall-clock time; `measure(metrics:)` picks metrics: `XCTClockMetric`, `XCTCPUMetric`, `XCTMemoryMetric`, `XCTStorageMetric`, `XCTApplicationLaunchMetric`, `XCTOSSignpostMetric`, `XCTHitchMetric(application:)`
 - `XCTOSSignpostMetric.scrollingAndDecelerationMetric` and `XCTOSSignpostMetric(subsystem:category:name:)` for your own signposted intervals
 - `XCTMeasureOptions`: `iterationCount`, `invocationOptions` (`.manuallyStart` / `.manuallyStop`)
 - Baselines are stored per device in the project; set them from the test result in Xcode
@@ -11276,7 +11276,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** Swift Testing is Apple's modern, macro-based test framework; it ships with Xcode 16+ and works in both Swift 5 and Swift 6 language modes. A test is any function marked `@Test`, assertions are just `#expect` and `try #require` (which show the actual values on failure), and suites are plain types with a fresh instance per test.
+**Short answer:** Swift Testing is Apple's modern, macro-based test framework; it has shipped with Xcode since Xcode 16 and works in both Swift 5 and Swift 6 language modes. A test is any function marked `@Test`, assertions are just `#expect` and `try #require` (which show the actual values on failure), and suites are plain types with a fresh instance per test.
 
 **Key points:**
 
@@ -11444,7 +11444,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Unit level:** put the logic in a `Sendable` use case with protocol dependencies; test it with Swift Testing and an actor-based fake store
 - **Queries:** `EntityQuery` types are plain structs; test `entities(for:)` and `entities(matching:)` against an in-memory store the same way
-- **System level (iOS 27+):** `IntentDefinitions(bundleIdentifier:)` exposes `intents`, `entities`, `enums`, `transientEntities` and `valueQueries` by identifier. `makeIntent(…)` builds an intent with parameters and `run()` performs it; entity definitions offer `entities(matching:)`, `entities(identifiers:)`, `allEntities()`, `suggestedEntities()`, `spotlightQuery(_:)` and `viewAnnotations()`
+- **System level (iOS 27+):** these tests live in a **UI testing target** (same signing team as the app), launch the app with `XCUIApplication().launch()` in `setUp`, and run intents out of process in that live app, without linking the app target. `IntentDefinitions(bundleIdentifier:)` exposes `intents`, `entities`, `enums`, `transientEntities` and `valueQueries` by identifier. `makeIntent(…)` builds an intent with parameters and `run()` performs it; entity definitions offer `entities(matching:)`, `entities(identifiers:)`, `allEntities()`, `suggestedEntities()`, `spotlightQuery(_:)` and `viewAnnotations()`
 - **Results:** `AnyAppEntity`, `AnyAppIntent` and `ResolvedIntentResult` use dynamic member lookup; reading a property with an explicit type (`let body: String = try note.body`) converts and throws on mismatch
 - **Manual:** run the App Shortcut phrases with Siri, check the Shortcuts app's action list and parameter summaries, search in Spotlight, and try widgets and controls that use the intent
 
@@ -11496,7 +11496,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Cache keys:** URL **plus** target size (and scale); a 60-pt avatar and a full-screen viewer need different decoded images
 - **Trade-offs:** `URLCache` as the disk tier is free and honors HTTP headers, but its eviction isn't configurable and it may skip large responses; a custom disk cache gives control (LRU, size cap, expiry) at the cost of more code. Decoded memory is expensive (width × height × 4 bytes), encoded disk data is cheap
 - **Failure modes:** memory pressure (`NSCache` evicts automatically; also clear on memory warnings), an image that fails to decode (cache a placeholder briefly, not forever), a URL whose content changes (versioned URLs from the server, or respect `ETag`), a waiting caller cancelled (the shared task keeps running for the others)
-- **Platform notes:** `traitCollection.displayScale` or `@Environment(\.displayScale)` to compute pixel size, never `UIScreen.main`. In iOS 27, `AsyncImage` gains HTTP caching and `.asyncImageURLSession(_:)` (iOS 27+), which is enough for simple screens, but with an iOS 18 target and feed-scale needs (downsampling, prefetching) a custom pipeline is still the answer
+- **Platform notes:** `traitCollection.displayScale` or `@Environment(\.displayScale)` to compute pixel size, never `UIScreen.main`. In iOS 27, `AsyncImage` gains HTTP caching and `.asyncImageURLSession(_:)` (iOS 27+), which is enough for simple screens, but while the app still supports iOS 26, and for feed-scale needs (downsampling, prefetching), a custom pipeline is still the answer
 - **Privacy/offline:** caches hold user content, so wipe on logout and apply file protection; only cache what can be re-downloaded
 - **Testing:** a stub `URLProtocol` per session configuration (not a global static) to count requests; assert that concurrent requests for one URL make one request and that the decoded size respects `maxPixelSize`
 
@@ -11525,7 +11525,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **History:** cursor pagination backwards (`before: oldestSeq`), loaded as the user scrolls up while keeping the scroll anchor; only recent messages are synced eagerly
 - **Scaling (client view):** one socket per app, not per conversation; batch read receipts; throttle typing indicators; lazy lists with stable IDs; the store indexes `(conversationID, seq)` (`#Index`); media as thumbnails plus on-demand full size
 - **Failure modes:** flaky networks (backoff with jitter, `NWPathMonitor` to reconnect promptly), duplicate delivery (dedupe by IDs), messages arriving while the app is suspended (push plus catch-up on foreground), the outbox stuck on one bad message (park it as failed)
-- **Privacy/security:** end-to-end encryption (Signal-protocol style: per-device identity keys, a double ratchet per session) means the server stores ciphertext only; keys live in the Keychain or Secure Enclave; the Notification Service Extension decrypts the push payload; CryptoKit provides the primitives, including post-quantum ML-KEM (`MLKEM768`, iOS 26+) for hybrid key agreement
+- **Privacy/security:** end-to-end encryption (Signal-protocol style: per-device identity keys, a double ratchet per session) means the server stores ciphertext only; keys live in the Keychain or Secure Enclave; the Notification Service Extension decrypts the push payload; CryptoKit provides the primitives, including post-quantum ML-KEM (`MLKEM768`) for hybrid key agreement
 - **Adaptive UI:** a `NavigationSplitView` (conversations | thread) on iPad, iPhone Duo and wide windows, collapsing to a stack on narrow widths; drafts saved per conversation so resizing or relaunching never loses text
 - **Testing:** Swift Testing on the store (dedupe, ordering, gap detection) with an in-memory container; a fake connection that replays scripted event streams including reconnects; UI tests for send/fail/retry
 
@@ -11606,7 +11606,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Server components:** a device registry (user ID, token, environment, app version, locale, preferences), a fan-out worker, an APNs client (HTTP/2, JWT), handling of APNs responses (410 Unregistered → delete the token), rate limiting and quiet hours
 - **Payload/headers:** `apns-push-type` (`alert`, `background`, `liveactivity`…), `apns-priority` (10 immediate, 5 power-friendly; background pushes must use 5), `apns-collapse-id` to replace older notifications, `apns-expiration`, `thread-id` for grouping, `interruption-level` and `relevance-score` in `aps`
 - **Interruption levels:** `passive` (no sound or wake), `active` (default), `time-sensitive` (breaks through Focus; needs the Time Sensitive capability, only for genuinely urgent items), `critical` (needs a special Apple entitlement)
-- **Silent pushes:** `content-available: 1` wakes the app for ~30 seconds in `application(_:didReceiveRemoteNotification:)`; delivery is throttled and not guaranteed, and doesn't happen after the user force-quits the app, so it's a hint to sync, never the only path
+- **Silent pushes:** `content-available: 1` wakes the app and gives it up to 30 seconds in `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`; delivery is throttled and not guaranteed, and doesn't happen after the user force-quits the app, so it's a hint to sync, never the only path
 - **Live Activities (ActivityKit):** request an activity with `pushType: .token` and upload each token from `activity.pushTokenUpdates`; **push-to-start** tokens (`Activity<…>.pushToStartTokenUpdates`) let the server start an activity remotely; **broadcast** pushes (`pushType: .channel(id)`) update every subscriber of an event (e.g. a match) with one request instead of one per device
 - **Trade-offs:** sending content in the payload (simple; visible to APNs unless encrypted) vs sending an ID and letting the service extension fetch or decrypt (private, but must finish within the extension's ~30-second budget); provisional (no prompt, quieter) vs an explicit prompt (prominent, one chance)
 - **Failure modes:** stale tokens (re-register every launch, delete on 410), development vs production APNs environment mismatch, a service extension that times out (iOS shows the original payload, so send a sensible fallback text), notification spam leading users to disable everything
@@ -11709,7 +11709,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Requirements:** seamless loading before the user hits the end, no duplicates or gaps, retry on error, pull-to-refresh, position kept across rotation/resize and relaunch, stable memory after thousands of rows
 - **Components:** `PaginatedList` (`@MainActor @Observable`; see Pagination Design for the paging logic), the view controller or view, a diffable data source / `ForEach` keyed by stable IDs, an image prefetcher, and a footer cell for loading/error/end
-- **Data flow:** prefetch callback or row `.task` → `model.loadNextPage()` (no-op unless idle) → API with cursor → model appends deduped items → UIKit: `updateProperties()` re-runs and applies a snapshot (iOS 26+) / SwiftUI: `body` re-renders the rows that changed
+- **Data flow:** prefetch callback or row `.task` → `model.loadNextPage()` (no-op unless idle) → API with cursor → model appends deduped items → UIKit: `updateProperties()` re-runs and applies a snapshot / SwiftUI: `body` re-renders the rows that changed
 - **Trigger distance:** based on items (10–20 ahead) or points (one to two screen heights), larger on fast scrolls; prefetching gives direction and velocity for free
 - **Trade-offs:** infinite scroll vs a "Load more" button (scroll is engaging; a button gives users a reachable footer and fewer accidental loads); keeping everything in memory vs windowing (drop pages far above, keep IDs, reload on scroll back)
 - **Failure modes:** duplicate trigger calls (model guard), duplicate IDs (filter, or `apply` crashes in UIKit / identity breaks in SwiftUI), errors (footer with Retry; no automatic retry loop), the end of the feed (stop triggering, show "You're all caught up")
@@ -12181,7 +12181,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Requirements:** record workouts with live metrics, show history and trends (steps, active energy, heart rate), stay in sync with data from other apps and the Watch, update while backgrounded, respect the user's choices and Health privacy rules
 - **Components:** `HealthAuthorization` (asks for the minimum types at the moment they're needed), `WorkoutRecorder` (session + live builder), `WorkoutImporter` (actor; anchored queries, anchors persisted per type), `MetricsStore` (SwiftData cache for dashboards), `TrendsService` (`HKStatisticsCollectionQuery` for daily buckets), and the dashboard models
-- **Data flow (record):** start → `HKWorkoutSession` (iOS 26+ on iPhone) with an `HKWorkoutConfiguration` → the live builder collects samples → pause/resume events → end → `finishWorkout()` saves to HealthKit → the importer picks it up like any other workout, so there's one code path
+- **Data flow (record):** start → `HKWorkoutSession` with an `HKWorkoutConfiguration` → the live builder collects samples → pause/resume events → end → `finishWorkout()` saves to HealthKit → the importer picks it up like any other workout, so there's one code path
 - **Data flow (sync):** at launch, enable background delivery for workouts/steps → register `HKObserverQuery`s → when HealthKit signals a change, run `HKAnchoredObjectQueryDescriptor` from the saved anchor → upsert by sample UUID, delete by `HKDeletedObject.uuid` → save the new anchor → call the observer's completion handler
 - **Authorization:** request in context ("Connect Health" in onboarding or the first workout), with clear purpose strings (`NSHealthShareUsageDescription`, `NSHealthUpdateUsageDescription`); read requests silently return less data if denied, so design empty states that say "No data, or Health access is off" and link to Settings; `statusForAuthorizationRequest(toShare:read:)` tells you whether the sheet would be shown
 - **Background delivery:** the HealthKit background-delivery entitlement; frequencies are a request, and some types (steps) are delivered at most hourly; observer queries must be registered on **every** launch (in `didFinishLaunching`), and the completion handler must be called or HealthKit backs off
@@ -12270,7 +12270,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Core Image pipeline:** a `CIImage` is a lazy recipe too; chaining filters builds a graph and nothing renders until `createCGImage` or drawing into a Metal-backed view; Core Image fuses filters and works in an extended linear sRGB working space by default
 - **Memory:** never hold full-resolution decoded bitmaps per undo step; preview from a downsampled proxy (`CGImageSourceCreateThumbnailAtIndex`, or a Lanczos scale in Core Image); one `CIContext` per app (contexts are expensive and cache intermediates); release the export bitmap right after writing
 - **Trade-offs:** CPU snapshots of rendered images per step (instant undo, huge memory) vs recipe replay (tiny memory, re-render on undo, which is fine because rendering is fast); a `CGImage` preview in SwiftUI (simple) vs an `MTKView` with `CIRenderDestination` (lowest latency for full-screen live preview)
-- **Scaling / failure modes:** very long recipes (collapse consecutive steps of the same kind; cap or checkpoint with a cached intermediate), slow devices (lower preview resolution while dragging, full preview on release), memory warnings (drop caches and the proxy, keep the recipe), export interrupted by backgrounding (`BGContinuedProcessingTask`, iOS 26+, for a user-initiated long export)
+- **Scaling / failure modes:** very long recipes (collapse consecutive steps of the same kind; cap or checkpoint with a cached intermediate), slow devices (lower preview resolution while dragging, full preview on release), memory warnings (drop caches and the proxy, keep the recipe), export interrupted by backgrounding (`BGContinuedProcessingTask` for a user-initiated long export)
 - **Adaptive UI:** canvas plus tool palette; tools in a bottom bar on a narrow iPhone, a sidebar or inspector on iPad and an unfolded iPhone Duo; preview size comes from the canvas's own geometry (`onGeometryChange`), which also sets the proxy resolution
 - **Privacy/offline:** fully on-device; Photos access with the limited library picker (`PhotosPicker` needs no permission); save edits back with `PHContentEditingOutput` so other apps see them as revertible adjustments
 - **Testing:** Swift Testing on `EditorModel` (perform, undo, redo, coalescing) with a stub renderer; golden-image tests of the pipeline at small sizes with a tolerance; Allocations and the Hangs instrument while scrubbing sliders
@@ -12288,7 +12288,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** I'd lean on the system document infrastructure rather than inventing my own file handling: a `DocumentGroup` scene gives the document browser, file coordination, autosave, iCloud Drive and version-conflict handling. On iOS 27 the document is an `@Observable` class conforming to `Document` (iOS 27+), whose file format is a plain `Codable` snapshot read and written off the main actor; with an iOS 18 target the same design uses `ReferenceFileDocument` (or `UIDocument` in UIKit).
+**Short answer:** I'd lean on the system document infrastructure rather than inventing my own file handling: a `DocumentGroup` scene gives the document browser, file coordination, autosave, iCloud Drive and version-conflict handling. On iOS 27 the document is an `@Observable` class conforming to `Document` (iOS 27+), whose file format is a plain `Codable` snapshot read and written off the main actor; while the app still supports iOS 26 the same design uses `ReferenceFileDocument`, which was the right choice before iOS 27 and is soft-deprecated in the iOS 27 SDK (it still builds without a warning), or `UIDocument` in UIKit.
 
 **Key points:**
 
@@ -12353,7 +12353,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Components:** SwiftData `@Model Note` (`id`, `title`, `body`, `modifiedAt`, `lastSyncedBody`, stored CloudKit system fields), a `@ModelActor NoteStore`, a `CKSyncEngine` with a `Sendable` delegate, a small persisted sync state, and `@MainActor @Observable` editor models
 - **Data flow (local edit):** the editor writes to the store (debounced while typing) → the store records `.saveRecord(id)` in `syncEngine.state` → the engine batches sends when the network allows → `nextRecordZoneChangeBatch` builds `CKRecord`s from local notes → on success, store the new system fields
 - **Data flow (remote change):** CloudKit push → the engine fetches → `.fetchedRecordZoneChanges` → upsert or delete locally → `@Query` updates every open view
-- **Mirroring vs `CKSyncEngine`:** mirroring is automatic but last-writer-wins per record, private database only, and constrains the schema (attributes need defaults or must be optional, no `#Unique`, relationships optional); `CKSyncEngine` (iOS 17) means more code but you own the merge, the schema mapping and sharing. `NSPersistentCloudKitContainer` is the Core Data equivalent of mirroring and also supports shared databases
+- **Mirroring vs `CKSyncEngine`:** mirroring is automatic but last-writer-wins per record, private database only, and constrains the schema (attributes need defaults or must be optional, no `#Unique`, relationships optional); `CKSyncEngine` means more code but you own the merge, the schema mapping and sharing. `NSPersistentCloudKitContainer` is the Core Data equivalent of mirroring and also supports shared databases
 - **Conflicts:** CloudKit rejects a stale save with `CKError.serverRecordChanged` and includes the `serverRecord`. For a note body I do a three-way merge (common ancestor = `lastSyncedBody`, plus local and server versions); if the same lines changed on both sides I keep both and mark the note "conflicted" rather than drop text. Title and metadata can be last-writer-wins
 - **Failure modes:** the sync state isn't persisted (every launch re-downloads everything), quota exceeded (surface it, keep working locally), the zone was deleted on another device (re-create or wipe locally), a large attachment (use `CKAsset` and keep the file on disk, not in the model), the user isn't signed in to iCloud (keep working locally and sync later)
 - **Account changes:** on `.accountChange` with sign-out or switch, erase the local store and engine state; that's both privacy and correctness
@@ -12379,7 +12379,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 **Key points:**
 
 - **Requirements:** edits on any device appear on the others within seconds when online, offline editing everywhere, no lost edits when two devices change the same entry, deletes that propagate, correct behavior when the user signs out of iCloud or switches accounts, small battery and data cost
-- **Decision matrix:** SwiftData `ModelConfiguration(cloudKitDatabase:)` or `NSPersistentCloudKitContainer` (least code, automatic mirroring, limited control: schema rules, no custom conflict handling) → `CKSyncEngine` (own store, own conflict policy, own zones; iOS 17+, so available at an iOS 18 target) → custom backend (any platform, server logic, your auth and ops cost)
+- **Decision matrix:** SwiftData `ModelConfiguration(cloudKitDatabase:)` or `NSPersistentCloudKitContainer` (least code, automatic mirroring, limited control: schema rules, no custom conflict handling) → `CKSyncEngine` (own store, own conflict policy, own zones) → custom backend (any platform, server logic, your auth and ops cost)
 - **Components:** SwiftData store, a `SyncCoordinator` actor owning the `CKSyncEngine` and its persisted `State.Serialization`, a record mapper (`Entry` ↔ `CKRecord` with a stable record name = entry UUID), a conflict resolver per entity, and a small `@MainActor @Observable` sync status for the UI
 - **Data flow (local edit):** save to SwiftData → tell the engine `.saveRecord(id)` → the engine batches and sends when appropriate → success clears pending state; `serverRecordChanged` triggers the conflict policy
 - **Data flow (remote edit):** silent push from CloudKit → the engine fetches zone changes → `fetchedRecordZoneChanges` → upsert by record name, delete by ID → `@Query` views update
@@ -12442,10 +12442,10 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Components:** `KeyManager` (generate, store and rotate identity and pre-keys; Keychain with an access group shared with the extension), `SessionStore` (ratchet state per peer device, in the App Group container with file protection), `Envelope` crypto (seal/open), the chat transport from Scalable Chat App, a Notification Service Extension, and a safety-number/QR verification screen
 - **Data flow (send):** fetch the recipient's device list and public keys (cached, signed) → for each device, advance that session's ratchet → seal the payload with the header as authenticated data → upload one envelope per device → server fans out
 - **Data flow (receive/push):** APNs delivers `{ciphertext, senderDevice, messageID}` with `mutable-content: 1` → the NSE loads keys and session state → decrypts → replaces the notification's title and body (or falls back to "New message" on failure) → writes the plaintext to the shared store so the app doesn't decrypt twice
-- **Key management:** identity signing keys sign each device's KEM public keys, so the directory can't swap them silently; Secure Enclave keys (`SecureEnclave.P256`, and `SecureEnclave.MLKEM768` / `MLDSA65` on iOS 26+) are non-exportable, which is great for identity but means a new device enrolls new keys and existing devices re-encrypt or the user starts fresh. Rotate pre-keys regularly; revoke a device by removing it from the list and re-keying groups
+- **Key management:** identity signing keys sign each device's KEM public keys, so the directory can't swap them silently; Secure Enclave keys (`SecureEnclave.P256`, and `SecureEnclave.MLKEM768` / `MLDSA65`) are non-exportable, which is great for identity but means a new device enrolls new keys and existing devices re-encrypt or the user starts fresh. Rotate pre-keys regularly; revoke a device by removing it from the list and re-keying groups
 - **Trust:** safety numbers or QR codes compare identity keys out of band; key-change warnings in the conversation; key transparency (an append-only log of directory changes) at large scale
 - **Trade-offs:** per-device fan-out costs bandwidth for big groups, so groups use sender keys (encrypt once with a group key, distribute that key pairwise); building a double ratchet yourself is risky, so prefer an audited library (libsignal) and use CryptoKit for primitives and HPKE; backups are either off, or encrypted with a user-held key
-- **Failure modes:** the NSE runs with a ~24 MB memory limit and a short time budget, so keep decryption lean; the device may be locked: Keychain items the NSE needs must use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, and its files need `.completeUntilFirstUserAuthentication`; ratchet state updated by the NSE and the app at the same time (coordinate with a file lock or let only one side advance); messages arriving out of order (keep skipped message keys for a bounded window)
+- **Failure modes:** the NSE runs with a tight memory limit (about 24 MB in practice; Apple doesn't document the figure) and about 30 seconds, so keep decryption lean; the device may be locked: Keychain items the NSE needs must use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, and its files need `.completeUntilFirstUserAuthentication`; ratchet state updated by the NSE and the app at the same time (coordinate with a file lock or let only one side advance); messages arriving out of order (keep skipped message keys for a bounded window)
 - **Privacy:** metadata still leaks (who talks to whom, when); minimize server logs, avoid putting sender names in the push payload, and make previews a user setting
 - **Testing:** Swift Testing round-trips for seal/open, tamper tests (flip a byte, change the header: open must throw), out-of-order and replay cases, and an NSE test harness that feeds recorded push payloads
 
@@ -12471,9 +12471,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Data flow (start in app):** order placed → `areActivitiesEnabled` → `Activity.request(…, pushType: .token)` → upload each push token with the order ID → backend stores it
 - **Data flow (update):** order service event → backend builds `{"aps": {"timestamp", "event": "update", "content-state": {…}, "stale-date", "alert"?}}` → APNs with the activity's token, topic `<bundle id>.push-type.liveactivity` → system updates the UI without waking the app
 - **Data flow (end):** `"event": "end"` with a final content state and `dismissal-date`, or `activity.end(_:dismissalPolicy:)` from the app
-- **Push-to-start (iOS 17.2):** the app uploads the token from `Activity<DeliveryAttributes>.pushToStartTokenUpdates` at launch; the server sends `"event": "start"` with `attributes-type`, `attributes` and `content-state`; the system then gives the app background time to receive the new activity through `Activity.activityUpdates`, where it observes `pushTokenUpdates` and uploads the update token, so the app must observe both sequences from launch
-- **Broadcast (iOS 18):** a channel per restaurant or event, created on the server; `pushType: .channel(channelID)`; one APNs request updates every subscriber, ideal for shared events, not for per-user deliveries
-- **Content-state rules:** keep it small (the payload limit is about 4 KB), use `Date`s with `Text(timerInterval:)` / `Text(_:style:)` so the countdown animates without updates, set `staleDate` so the UI can show "Updating…" if the server goes quiet, and send `relevance-score` when there are several activities
+- **Push-to-start:** the app uploads the token from `Activity<DeliveryAttributes>.pushToStartTokenUpdates` at launch; the server sends `"event": "start"` with `attributes-type`, `attributes` and `content-state`; the system then gives the app background time to receive the new activity through `Activity.activityUpdates`, where it observes `pushTokenUpdates` and uploads the update token, so the app must observe both sequences from launch
+- **Broadcast:** a channel per restaurant or event, created on the server; `pushType: .channel(channelID)`; one APNs request updates every subscriber, ideal for shared events, not for per-user deliveries
+- **Content-state rules:** keep it small (static attributes plus content state can't exceed 4 KB combined), use `Date`s with `Text(timerInterval:)` / `Text(_:style:)` so the countdown animates without updates, set `staleDate` so the UI can show "Updating…" if the server goes quiet, and send `relevance-score` when there are several activities
 - **Trade-offs:** server push (works while the app is closed, needs backend work) vs local updates from the app (only while it runs); frequent updates (`NSSupportsLiveActivitiesFrequentUpdates`, still budgeted; `frequentPushesEnabled` tells you if the user allowed it) vs a few meaningful stage changes; priority 10 for alerts vs 5 for silent ETA nudges (cheaper on the budget)
 - **Failure modes:** tokens rotate (upload every value from the sequence), the user disables Live Activities (`activityEnablementUpdates`; fall back to notifications), the activity ends by system limits (activities have a maximum duration; observe `activityStateUpdates`), APNs throttling under heavy updates (coalesce on the server), a pushed state that doesn't decode (keep `ContentState` backward compatible)
 - **Privacy:** Lock Screen content is visible to anyone holding the phone; show first names and approximate info only, and nothing sensitive in `alert` text
@@ -12501,9 +12501,9 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Data flow (widget tap):** `Button(intent: CompleteHabitIntent(habitID:))` → the system runs `perform()` in the widget extension → write to the App Group store → the system reloads the tapped widget after `perform()`; the intent reloads *other* kinds that show the same data (`WidgetCenter.shared.reloadTimelines(ofKind:)`, `ControlCenter.shared.reloadControls(ofKind:)`) → timeline providers read the store → new snapshots rendered
 - **Data flow (app):** views use `@Query`; on `scenePhase == .active` the context sees changes the extension saved; SwiftData history (`fetchHistory`) can tell the app exactly what changed while it was away
 - **Storage:** `ModelConfiguration(groupContainer: .identifier("group.…"))` so every process opens the same file; small settings in `UserDefaults(suiteName:)`; keep widget reads cheap (fetch today's habits only, not full history)
-- **Controls (iOS 18):** a `ControlWidgetToggle` "Meditated today" or a `ControlWidgetButton` that runs the same intent; controls also appear on the Lock Screen and the Action button
+- **Controls:** a `ControlWidgetToggle` "Meditated today" or a `ControlWidgetButton` that runs the same intent; controls also appear on the Lock Screen and the Action button
 - **Live Activities (optional):** ActivityKit for a running habit timer, started from an intent; updates are local while the app runs, or push-based (see Push Notification System)
-- **Trade-offs:** intents running in the extension (instant, no app launch, tight memory and time limits) vs `openAppWhenRun` (full app, slower); precomputed timelines (budgeted, predictable) vs reloading on every write (fresh, but reload only the affected kinds, never `reloadAllTimelines()` on each change); SwiftData in the App Group (simple) vs a tiny JSON snapshot for the widget (fastest reads, two sources of truth)
+- **Trade-offs:** intents running in the extension (instant, no app launch, tight memory and time limits) vs opening the app with `supportedModes` (full app, slower; the older `openAppWhenRun` is marked deprecated since iOS 26 but still builds without a warning); precomputed timelines (budgeted, predictable) vs reloading on every write (fresh, but reload only the affected kinds, never `reloadAllTimelines()` on each change); SwiftData in the App Group (simple) vs a tiny JSON snapshot for the widget (fastest reads, two sources of truth)
 - **Failure modes:** two processes writing at once (keep writes small, save immediately, re-fetch before mutating), the widget showing yesterday after midnight (timeline entries at the next start-of-day and a `.after(midnight)` reload policy), deleted habits referenced by a configured widget (the entity query returns nothing; show a placeholder), schema migration while the extension has an old copy open (ship migrations in the shared package)
 - **Adaptive UI:** widget families from `.accessoryCircular` to `.systemLarge`; the app's list/detail is a `NavigationSplitView` that becomes two columns on iPad and an unfolded iPhone Duo
 - **Privacy/offline:** everything works offline; the App Group container holds personal health-adjacent data, so use file protection and exclude it from analytics; widgets on the Lock Screen may be visible to others, so offer a redacted style (`.privacySensitive()`)
@@ -12531,7 +12531,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Data flow (toggle):** user flips "Price drops" → optimistic UI → `PUT` with the new value → on failure roll back and explain → server stores per user; every later send checks it before fan-out
 - **Data flow (system state):** on appear and on `scenePhase == .active` → `UNUserNotificationCenter.current().notificationSettings()` → if `.denied`, show a banner with a button to `UIApplication.openNotificationSettingsURLString`; if `.provisional`, explain that notifications arrive quietly in Notification Center and, once the user has engaged, offer the full prompt
 - **Topic → system mapping:** each topic gets a `UNNotificationCategory` (actions, `thread-id` grouping), an interruption level (`passive` for digests, `active` for messages, `timeSensitive` only for things like a delivery at the door), and a `relevance-score` for summaries; transactional topics may be on by default, marketing must be opt-in
-- **Settings round trip:** request authorization with `.providesAppNotificationSettings`; iOS then shows "<App> Notification Settings" in Settings, and tapping it calls `userNotificationCenter(_:openSettingsFor:)`, where the router opens this screen
+- **Settings round trip:** request authorization with `.providesAppNotificationSettings`; iOS then shows "*App name* Notification Settings" in Settings, and tapping it calls `userNotificationCenter(_:openSettingsFor:)`, where the router opens this screen
 - **Trade-offs:** server-side preferences (cross-device, enforceable, also cover email) vs local-only (simple, but other devices keep getting pushes); filtering on the server (saves pushes and battery) vs filtering in a Notification Service Extension (can't fully suppress a visible push, so only for enrichment); provisional (no prompt, quiet delivery) vs an explicit prompt (prominent, one chance)
 - **Failure modes:** offline toggle (queue the change, show "will sync"), conflicting edits on two devices (last write wins per topic with a server timestamp is fine here), the user disables a topic but a push is already in flight (accept it; send `apns-expiration` for timely content), the system switch off while the in-app toggles look on (always show the system banner first)
 - **Adaptive UI:** a `Form` with sections per topic group; on iPad and an unfolded iPhone Duo it lives in the settings column of a `NavigationSplitView`; Dynamic Type and VoiceOver labels that read the topic and its state
@@ -12558,7 +12558,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Requirements:** value before asks (users see the app before any alert), permissions requested only for features the user picked, graceful paths for "denied", resumable if the app is killed mid-onboarding, accessible, measurable, App Review compliant
 - **Components:** `OnboardingFlow` (`@MainActor @Observable` state machine), a `PermissionGateway` protocol with live implementations per permission, priming screens, an experiment client for copy and ordering variants, analytics events, and an `@AppStorage` flag for "onboarding completed" plus per-permission "deferred at" dates
 - **Data flow:** intro → user picks goals (e.g. "remind me", "nearby offers") → the flow builds a queue of permissions those goals need → filters out anything not `notDetermined` → for each: priming screen → "Allow" shows the system alert / "Not now" defers → finished → first real screen
-- **Per permission:** notifications via `requestAuthorization(options:)`, or **provisional** authorization with no prompt at all, upgraded later when the user engages; location as *when in use* first (`CLServiceSession(authorization: .whenInUse)`, iOS 18, or `requestWhenInUseAuthorization()`), *always* only for a feature that truly needs it and later; App Tracking Transparency (`ATTrackingManager.requestTrackingAuthorization()`) only if we actually track across apps, never before the app is active, and with the purpose string in Info.plist
+- **Per permission:** notifications via `requestAuthorization(options:)`, or **provisional** authorization with no prompt at all, upgraded later when the user engages; location as *when in use* first (`CLServiceSession(authorization: .whenInUse)` or `requestWhenInUseAuthorization()`), *always* only for a feature that truly needs it and later; App Tracking Transparency (`ATTrackingManager.requestTrackingAuthorization()`) only if we actually track across apps, never before the app is active, and with the purpose string in Info.plist
 - **Deferring:** "Not now" stores the date and the context; the next ask happens in context (saving the first favorite store → location priming), with a cool-off so users aren't nagged
 - **Denied paths:** explain what still works, offer a one-tap link to Settings (`UIApplication.openSettingsURLString`), and re-check status on every return to the foreground
 - **A/B testing:** variants change copy, illustration and timing, not the system alert; assign once per install, log exposure when the priming screen appears, and judge on retention and feature use, not just the opt-in rate
@@ -12587,7 +12587,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Requirements:** fast sign-up with no password, sign-in on new devices, stay signed in across launches and background refresh, multiple devices, sign out everywhere, account deletion in the app, phishing resistance, recovery when a device is lost
 - **Components:** `SignInCoordinator` (`ASAuthorizationController`, passkey + Apple ID requests), `AuthAPI` (challenge, verify, refresh, revoke, delete), `TokenProvider` actor (see Authentication), Keychain store, `SessionModel` (`@MainActor @Observable`: `signedOut`, `signedIn(User)`, `expired`), and the app router that swaps root flows
-- **Sign-up:** the server issues a registration challenge → `createCredentialRegistrationRequest(challenge:name:userID:)` → the server stores the public key; iOS 26 adds an account-creation request (`ASAuthorizationAccountCreationProvider` (iOS 26+)) that creates the account and passkey in one system sheet with prefilled contact details
+- **Sign-up:** the server issues a registration challenge → `createCredentialRegistrationRequest(challenge:name:userID:)` → the server stores the public key; an account-creation request (`ASAuthorizationAccountCreationProvider`) creates the account and passkey in one system sheet with prefilled contact details
 - **Sign-in:** challenge → assertion (passkey) or identity token (Apple) → server verification → tokens → Keychain → `SessionModel.signedIn`; AutoFill-assisted requests let the passkey appear in the QuickType bar of the username field
 - **Staying signed in:** access token ~15 min, refresh token rotated on each use and bound to the device; refresh proactively near expiry and reactively once on 401; Keychain item `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so background work can refresh and tokens never restore onto another device
 - **Sign in with Apple specifics:** the email (possibly a private relay address) and name are delivered only on the first authorization, so the server must store them then; check `ASAuthorizationAppleIDProvider().credentialState(forUserID:)` at launch and sign out on `.revoked`
@@ -12644,7 +12644,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 **Key points:**
 
-- **Requirements:** one codebase and binary; usable at every size from a narrow window to a full iPad; no lost context on fold/unfold, rotation or resize; per-window state on iPad; accessible at large Dynamic Type; iOS 18 deployment target with iOS 26/27 features behind availability checks
+- **Requirements:** one codebase and binary; usable at every size from a narrow window to a full iPad; no lost context on fold/unfold, rotation or resize; per-window state on iPad; accessible at large Dynamic Type; iOS 26 deployment target with iOS 27 and 27.1 features behind availability checks
 - **Layout architecture:** structure from size classes (compact → stack and tab bar, regular → sidebar and split view), detail from measured width (`onGeometryChange`, compositional layout's `effectiveContentSize`), two-pane content in `ArrangementView` (iOS 27.1+) with a `ViewThatFits` fallback; reading widths capped (`.frame(maxWidth:)`, `readableContentGuide`)
 - **Navigation model:** selection is the source of truth (`selectedTripID`, then a `NavigationPath` for deeper pushes). `NavigationSplitView` turns selection into a pushed detail when collapsed and a side-by-side detail when expanded, so one model serves every size; deep links set the same selection
 - **State preservation:** app data in a shared `@MainActor @Observable` store (SwiftData underneath); per-window UI state (selection, tab, path) in `@SceneStorage` or a per-scene router; scroll position restored by item ID with `ScrollPosition`, not by offset; drafts saved to the store as the user types, never kept only in view `@State`
@@ -12695,7 +12695,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 <details>
 <summary>Reveal answer</summary>
 
-**Short answer:** I'd build it on the **Foundation Models** framework (iOS 26+): a `LanguageModelSession` on `SystemLanguageModel.default`, with **guided generation**, so the model fills a `@Generable` Swift type instead of returning free text I have to parse. The feature is optional by design: I check `model.availability` first and simply hide the UI when the device isn't eligible, Apple Intelligence is off, or the model is still downloading, and every failure (guardrail, refusal, context too long) degrades to "See all reviews" rather than an error.
+**Short answer:** I'd build it on the **Foundation Models** framework: a `LanguageModelSession` on `SystemLanguageModel.default`, with **guided generation**, so the model fills a `@Generable` Swift type instead of returning free text I have to parse. The feature is optional by design: I check `model.availability` first and simply hide the UI when the device isn't eligible, Apple Intelligence is off, or the model is still downloading, and every failure (guardrail, refusal, context too long) degrades to "See all reviews" rather than an error.
 
 **Key points:**
 
@@ -12706,8 +12706,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Context limits:** the on-device model has a small context window (`contextSize`; `tokenCount(for:)` (iOS 26.4+) to measure a prompt), so select and truncate input: recent and helpful reviews first, a fixed cap, or summarize in chunks and then summarize the summaries
 - **Tools:** a `Tool` lets the model call back into the app (e.g. fetch product specs) instead of stuffing everything into the prompt; keep tools few and deterministic
 - **Fallbacks:** unavailable → hide; content blocked or refused → fallback text; too long → shrink input and retry once; otherwise → fallback and log a category (never the content). In iOS 27, a session can also target other `LanguageModel` providers, including `PrivateCloudComputeLanguageModel` (iOS 27+) with a quota you must check, which is a deliberate privacy and product decision, not a silent fallback
-- **iOS 27 changes:** errors move to `LanguageModelError` (iOS 27+), and `LanguageModelSession.GenerationError` is deprecated, so code supporting both checks for both (below); custom adapters (`SystemLanguageModel.Adapter`) were deprecated in iOS 26.4 and are unavailable in the iOS 27 SDK; dynamic instructions and profiles and multimodal prompts are new
-- **Own models:** for a task-specific model of your own (classification, embeddings, a fine-tuned network), Core ML is the established runtime, and Apple introduced a new **Core AI** framework in iOS 27 for running your own models on device; I'd check Apple's current guidance on Core AI vs Core ML before committing, because that's choosing a model runtime, not writing a prompt
+- **iOS 27 changes:** errors move to `LanguageModelError` (iOS 27+), and `LanguageModelSession.GenerationError` is deprecated in iOS 27 (a warning once the deployment target reaches 27), so code that still supports iOS 26 checks for both (below); custom adapters (`SystemLanguageModel.Adapter`) were deprecated in iOS 26.4 and are unavailable in the iOS 27 SDK; dynamic instructions and profiles and multimodal prompts are new
+- **Own models:** for a task-specific model of your own (classification, embeddings, a fine-tuned network), iOS 27's new **Core AI** framework is Apple's runtime for neural-network models on device (the same inference engine behind Apple Intelligence): you convert a PyTorch model to its `.aimodel` format and it runs across the CPU, GPU and Neural Engine. Apple points to Core ML for other model types, such as decision trees or tabular pipelines, and Core ML is still what you use on iOS 26. That's choosing a model runtime, not writing a prompt
 - **Trade-offs:** on-device (private, free, offline, smaller model) vs server LLMs (stronger, cost per call, data leaves the device, needs consent and a privacy policy update); precomputing summaries on the server for popular products vs per-device generation
 - **Privacy:** no prompt or output logging; analytics record outcome categories and thumbs-up/down only; label the content as AI-generated; on-device inference sends nothing anywhere, but switching to a server model means updating the privacy manifest, the privacy policy and the user-facing explanation
 - **Evaluation and testing:** a curated set of review bundles with expected properties (mentions the top complaint, no invented facts, length limits), run against every prompt change and new OS. The **Evaluations** framework (iOS 27+, used from the test target with Swift Testing) runs such sets with custom `Evaluator`s, `ModelJudgeEvaluator` for model-graded criteria like tone, and `ToolCallEvaluator` for tool use, and exports results to compare runs. Unit tests inject a fake summarizer protocol so UI states are tested without the model
@@ -12733,8 +12733,8 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 - **Components:** an `AppIntents` target or package holding entities, queries and intents (shared with widgets and extensions); a `Sendable` repository the queries call; a Spotlight indexer; an `AppShortcutsProvider` for zero-setup phrases; the app's router for intents that open UI
 - **Data flow (indexing):** repository save → indexer maps models to `RecipeEntity` → `indexAppEntities` → on delete, `deleteAppEntities(identifiedBy:ofType:)`; a full re-index on schema version change or first launch
 - **Data flow (invocation):** Siri or Spotlight picks an intent → the system resolves parameters through `EntityQuery.entities(for:)` by ID → `perform()` runs in the app process (or an extension) → returns a dialog/snippet, or an `OpenIntent` hands the entity to the router
-- **Schemas:** Apple's schema domains (`.mail`, `.photos`, `.journal`, `.notes`, `.reader`, `.browser` and others) describe shapes Apple Intelligence already understands. Use one where it matches, and plain `AppEntity`/`AppIntent` otherwise. The macros were named `@AssistantEntity` / `@AssistantIntent` before the Xcode 27 SDK; the new names still deploy to iOS 18. In iOS 27 the per-domain `search` intents are deprecated in favour of `.system.searchInApp` (iOS 27+)
-- **On-screen awareness ("view annotations"):** SwiftUI `.appEntityIdentifier(_:)` and `.appEntityUIElements(_:)`, UIKit `appIntentsDataSource` on table/collection views, and `NSUserActivity.appEntityIdentifier` (iOS 18.2+). `RelevantEntities.shared.updateEntities(_:for:)` (iOS 27+) tells the system which entities matter in a context such as now-playing audio
+- **Schemas:** Apple's schema domains (`.mail`, `.photos`, `.journal`, `.notes`, `.reader`, `.browser` and others) describe shapes Apple Intelligence already understands. Use one where it matches, and plain `AppEntity`/`AppIntent` otherwise. The macros were named `@AssistantEntity` / `@AssistantIntent` before the Xcode 27 SDK; the old names still build but are deprecated (renamed) and warn. In iOS 27 the per-domain `search` intents are deprecated (a warning once the deployment target reaches 27) in favour of `.system.searchInApp` (iOS 27+)
+- **On-screen awareness ("view annotations"):** SwiftUI `.appEntityIdentifier(_:)` and `.appEntityUIElements(_:)`, UIKit `appIntentsDataSource` on table/collection views, and `NSUserActivity.appEntityIdentifier`. `RelevantEntities.shared.updateEntities(_:for:)` (iOS 27+) tells the system which entities matter in a context such as now-playing audio
 - **Trade-offs:** in-app intents are simplest and share state; an App Intents extension launches faster and avoids loading the UI. Indexing everything gives better recall but costs battery and leaks more into the index; index what users actually search for
 - **Failure modes:** a stale index after a server-side delete (queries must tolerate missing IDs and return fewer entities), slow `entities(for:)` (Siri times out: keep it a local lookup), intents run while the app is locked (data protection: decide which intents need `.completeFileProtection` data and require unlock), schema changes between versions (re-index on upgrade)
 - **Privacy/offline:** queries read the local store, so they work offline; don't index private content (health notes, payment data) and use `hideInSpotlight` where needed; nothing leaves the device unless the user's request does
@@ -12844,7 +12844,7 @@ Use this sheet to test your knowledge in interview scenarios. Cover the answers 
 
 - **Requirements:** WCAG-aligned contrast and target sizes, every screen usable with VoiceOver, Voice Control and Switch Control, layouts that work up to the largest accessibility text sizes, respect for Reduce Motion / Reduce Transparency / Increase Contrast / Bold Text, regressions caught before release
 - **Components (design system):** semantic color tokens with high-contrast variants in the asset catalog; text styles only (`.font(.body)`, `UIFont.preferredFont(forTextStyle:)`), no fixed point sizes; spacing via `@ScaledMetric` / `UIFontMetrics`; components that switch from horizontal to vertical layout at accessibility sizes (`dynamicTypeSize.isAccessibilitySize`, `ViewThatFits`); a minimum 44×44 pt hit target; motion that checks Reduce Motion
-- **Liquid Glass (iOS 26+):** standard bars, tab bars and `.glassEffect` adapt to Reduce Transparency and Increase Contrast automatically. Custom materials must check `accessibilityReduceTransparency` themselves. iOS 27 adds a user transparency setting, so never depend on a particular translucency to reach contrast: keep text on solid or sufficiently opaque backgrounds
+- **Liquid Glass:** standard bars, tab bars and `.glassEffect` adapt to Reduce Transparency and Increase Contrast automatically. Custom materials must check `accessibilityReduceTransparency` themselves. iOS 27 adds a user transparency setting, so never depend on a particular translucency to reach contrast: keep text on solid or sufficiently opaque backgrounds
 - **Components (semantics):** labels for icon-only buttons; `.accessibilityElement(children: .combine)` on rows so VoiceOver reads one sentence; custom actions (`.accessibilityAction(named:)`) instead of hidden swipe gestures; headers marked with `.isHeader` for rotor navigation; `accessibilityIdentifier` for tests only, never as a label
 - **Pipeline:** UI tests run `performAccessibilityAudit` (contrast, Dynamic Type, clipped text, hit regions, missing descriptions) on each critical flow; snapshot tests render components at default and accessibility XXXL sizes, light/dark, and RTL; a custom lint rule flags `.font(.system(size:))` and icon buttons without labels
 - **Process:** an accessibility section in the PR template; per-feature acceptance criteria; a VoiceOver/Voice Control walkthrough as part of release QA; a known-issues list with tickets (suppressed in audits only with a link); Accessibility Nutrition Labels on the App Store kept truthful
